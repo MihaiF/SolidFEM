@@ -35,7 +35,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <Engine/Profiler.h>
 #include <iostream>
 
-
 #pragma warning( disable : 4244) // for double-float conversions
 #pragma warning( disable : 4267) // for size_t-uint conversions
 
@@ -79,14 +78,14 @@ namespace FEM_SYSTEM
 		// use the linear mesh stored as an array of Tetrahedron in the base class
 		StridedVector<uint16> stridedVec(&(tetrahedra[0].i[0]), (uint)tetrahedra.size(), sizeof(Tetrahedron));
 
-		//double mesh_time;
+		double mesh_time;
 		{
 			MEASURE_TIME_P("mesh_time", mesh_time);
 			mTetMesh.reset(MeshFactory::MakeMesh<TetrahedralMesh<uint32>>(mOrder, nodes.size(), stridedVec, tetrahedra.size()));
 		}
 
 		std::vector<Vector3R> points(nodes.size());
-		//double other_time;
+		double other_time;
 		{
 			MEASURE_TIME_P("other_time", other_time);
 			// 2. Compute the interpolated positions
@@ -99,7 +98,7 @@ namespace FEM_SYSTEM
 		}
 
 		std::vector<Vector3R> interpolatedPositions(GetNumNodes());
-		//double interpolate_time;
+		double interpolate_time;
 		{
 			MEASURE_TIME_P("interpolate_time", interpolate_time);
 			// interpolate the mesh node positions (for the given order)
@@ -108,7 +107,7 @@ namespace FEM_SYSTEM
 		}
 
 		std::vector<bool> fixed(GetNumNodes(), false);
-		//double other_time2;
+		double other_time2;
 		{
 			MEASURE_TIME_P("other_time2", other_time2);
 			// 3. Mark all boundary nodes
@@ -118,9 +117,9 @@ namespace FEM_SYSTEM
 				fixed[i] = nodes[i].invMass == 0;
 			}
 		}
-		//other_time += other_time2;
+		other_time += other_time2;
 
-		//double boundary_time;
+		double boundary_time;
 		{
 			MEASURE_TIME_P("boundary_time", boundary_time);
 			// 3.5 Check the higher order nodes and ensure that the expected leftmost cantilever nodes are marked fixed
@@ -192,7 +191,7 @@ namespace FEM_SYSTEM
 		// 4. Create a index-mapping from mesh-global-index to index into the mReferencePosition and mDeformedPositions vectors
 		// - this is too allow all of the fixed nodes to be listed first in the two vectors.
 
-		//double other_time3;
+		double other_time3;
 		{
 			MEASURE_TIME_P("other_time3", other_time3);
 			// create a mapping with the fixed nodes first
@@ -233,7 +232,7 @@ namespace FEM_SYSTEM
 				mVelocities[i - mNumBCs] = nodes[i].vel;
 			}
 		}
-		//other_time += other_time3;
+		other_time += other_time3;
 	}
 
 	void FemPhysicsLinear::ComputeBarycentricJacobian(uint32 i, Vector3R y[4])

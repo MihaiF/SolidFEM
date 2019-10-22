@@ -32,5 +32,5 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // Empyt macros - these can be redefined by the user
 
-#define MEASURE_TIME_P(...)
+#define MEASURE_TIME_P(text, var) var = 0;
 #define PROFILE_SCOPE(...)
