@@ -30,18 +30,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef PLATFORM_H
-#define PLATFORM_H
+// Empyt macros - these can be redefined by the user
 
-#ifdef _WIN32
-#ifndef WIN32_LEAN_AND_MEAN
-#	define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers
-#endif
-#	include <windows.h>
-
-#undef min
-#undef max
-
-#endif
-
-#endif // PLATFORM_H
+#define MEASURE_TIME_P(...)
+#define PROFILE_SCOPE(...)

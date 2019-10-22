@@ -156,6 +156,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="Engine\Platform.h" />
+    <ClInclude Include="Engine\Profiler.h" />
+    <ClInclude Include="Engine\Types.h" />
+    <ClInclude Include="Engine\Utils.h" />
     <ClInclude Include="Include\FemDataStructures.h" />
     <ClInclude Include="Include\FemPhysicsBase.h" />
     <ClInclude Include="Include\FemPhysicsLinear.h" />
@@ -163,7 +167,8 @@
     <ClInclude Include="Include\LinearSolver.h" />
     <ClInclude Include="Include\StridedVector.h" />
     <ClInclude Include="Include\TetrahedralMesh.h" />
-    <ClInclude Include="Source\FemPhysicsLinearElasticity.h" />
+    <ClInclude Include="Math\Matrix3.h" />
+    <ClInclude Include="Math\Vector3.h" />
     <ClInclude Include="Source\MeshFactory.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>
