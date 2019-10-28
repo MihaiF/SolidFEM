@@ -30,9 +30,43 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-// Empty macros - these can be redefined by the user
+#ifndef FEM_PHYSICS_ANY_ORDER_COROTATIONAL_ELASTICITY_H
+#define FEM_PHYSICS_ANY_ORDER_COROTATIONAL_ELASTICITY_H
 
-#define MEASURE_TIME_P(text, var) var = 0;
-#define PROFILE_SCOPE(...)
-#define BEGIN_PROFILE(text)
-#define END_PROFILE()
+#include "FemPhysicsLinear.h"
+#include "TetrahedralMesh.h"
+#include "LinearSolver.h"
+#include <memory>
+
+namespace FEM_SYSTEM
+{
+	class FemPhysicsCorotationalElasticity : public FemPhysicsLinear
+	{
+	public:
+		FemPhysicsCorotationalElasticity(std::vector<Tetrahedron>& tetrahedra,
+			std::vector<Node>& allNodes, const FemConfig& config);
+
+		void Step(real dt) override;
+		void SolveEquilibrium(float) override;
+
+	private:
+		void StepExplicit(real h);
+		void StepImplicit(real h);
+		void AssembleStiffnessMatrix();
+		void CacheLocalStiffnessMatrices();
+		void ComputeRotations();
+		void ComputeElasticForces(EigenVector& elasticForce);
+
+	private:
+		std::vector<EigenMatrix> mCachedLocalStiffnessMatrix;
+		SparseMatrix mStiffnessMatrix; // stiffness matrix
+		EigenMatrix mDenseK; // dense stiffness matrix
+		std::vector<Matrix3R> mCachedRotationMatrix;
+		EigenVector mElasticForce;
+		LinearSolver mExplicitMassSolver;
+	};
+
+
+} // namespace FEM_SYSTEM
+
+#endif // FEM_PHYSICS_ANY_ORDER_COROTATIONAL_ELASTICITY_H

@@ -66,6 +66,15 @@
     <ClInclude Include="Math\Matrix3.h">
       <Filter>Math</Filter>
     </ClInclude>
+    <ClInclude Include="Include\FemPhysicsLinearIncompressible.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Include\FemPhysicsCorotationalElasticity.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\PolarDecomposition.h">
+      <Filter>Source Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\FemPhysicsLinear.cpp">
@@ -78,6 +87,15 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="FEMLibrary.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\FemPhysicsLinearIncompressible.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\FemPhysicsCorotationalElasticity.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\PolarDecomposition.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

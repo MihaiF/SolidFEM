@@ -30,9 +30,21 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-// Empty macros - these can be redefined by the user
+#ifndef POLAR_DECOMPOSITION_H
+#define POLAR_DECOMPOSITION_H
 
-#define MEASURE_TIME_P(text, var) var = 0;
-#define PROFILE_SCOPE(...)
-#define BEGIN_PROFILE(text)
-#define END_PROFILE()
+#include "FemDataStructures.h"
+
+namespace FEM_SYSTEM
+{
+	class PolarDecomposition
+	{
+	public:
+		static bool EigenPolarDecomposition(Matrix3R const & A, Matrix3R & R, Matrix3R & S);
+		static void QRPolarDecomposition(const Matrix3R& F, Matrix3R& R);
+	};
+
+	void ComputePolarDecomposition(const Matrix3R& F, Matrix3R& R, Matrix3R& U);
+}
+
+#endif // POLAR_DECOMPOSITION_H

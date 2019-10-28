@@ -162,25 +162,31 @@
     <ClInclude Include="Engine\Utils.h" />
     <ClInclude Include="Include\FemDataStructures.h" />
     <ClInclude Include="Include\FemPhysicsBase.h" />
+    <ClInclude Include="Include\FemPhysicsCorotationalElasticity.h" />
     <ClInclude Include="Include\FemPhysicsLinear.h" />
     <ClInclude Include="Include\FemPhysicsLinearElasticity.h" />
+    <ClInclude Include="Include\FemPhysicsLinearIncompressible.h" />
     <ClInclude Include="Include\LinearSolver.h" />
     <ClInclude Include="Include\StridedVector.h" />
     <ClInclude Include="Include\TetrahedralMesh.h" />
     <ClInclude Include="Math\Matrix3.h" />
     <ClInclude Include="Math\Vector3.h" />
     <ClInclude Include="Source\MeshFactory.h" />
+    <ClInclude Include="Source\PolarDecomposition.h" />
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="FEMLibrary.cpp" />
+    <ClCompile Include="Source\FemPhysicsCorotationalElasticity.cpp" />
     <ClCompile Include="Source\FemPhysicsLinear.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
       </PrecompiledHeaderFile>
     </ClCompile>
     <ClCompile Include="Source\FemPhysicsLinearElasticity.cpp" />
+    <ClCompile Include="Source\FemPhysicsLinearIncompressible.cpp" />
     <ClCompile Include="Source\LinearSolver.cpp" />
+    <ClCompile Include="Source\PolarDecomposition.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
