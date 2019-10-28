@@ -37,7 +37,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "LinearSolver.h"
 #include <set>
 
-// TODO: push/pop disable warning
 #pragma warning( disable : 4305)
 
 namespace FEM_SYSTEM
@@ -51,6 +50,7 @@ namespace FEM_SYSTEM
 			bool mUseKKTMatrix = true;
 			bool mUseCorotational = false;
 			int mPressureOrder = 1;
+			bool mFullIncompressilble = false;
 		};
 
 	public:

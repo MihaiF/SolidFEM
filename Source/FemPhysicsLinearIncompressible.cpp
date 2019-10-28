@@ -39,10 +39,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma warning( disable : 4244) // for double-float conversions
 #pragma warning( disable : 4267) // for size_t-uint conversions
 
-//#define INCOMPRESSIBLE
-//#define SPARSE_IICR_KKT
-//#define UZAWA
-
 namespace FEM_SYSTEM
 {
 	FemPhysicsLinearIncompressible::FemPhysicsLinearIncompressible(std::vector<Tetrahedron>& tetrahedra,
@@ -138,12 +134,9 @@ namespace FEM_SYSTEM
 					{
 						PROFILE_SCOPE("II-KKT");
 						StepImplicitKKT(dt);
-						//StepUnconstrained(h);
-						//SolveConstraintsKKT(h, true);
 					}
 					else
 					{
-						//StepImplicitSchur(dt);
 						StepUnconstrained(h);
 						SolveConstraintsSchur(h, true);
 					}
@@ -175,9 +168,8 @@ namespace FEM_SYSTEM
 			mSystemMatrix.block(0, 0, numDofs, numDofs) = mDeviatoricStiffnessMatrix;
 			mSystemMatrix.block(0, numDofs, numDofs, numPNodes) = mVolJacobianMatrix.transpose();
 			mSystemMatrix.block(numDofs, 0, numPNodes, numDofs) = mVolJacobianMatrix;
-#ifndef INCOMPRESSIBLE
-			mSystemMatrix.block(numDofs, numDofs, numPNodes, numPNodes) = -mVolComplianceMatrix;
-#endif
+			if (!mConfig.mFullIncompressilble)
+				mSystemMatrix.block(numDofs, numDofs, numPNodes, numPNodes) = -mVolComplianceMatrix;
 
 			EigenVector rhs(size);
 			rhs.setZero();
@@ -214,34 +206,6 @@ namespace FEM_SYSTEM
 			for (uint32 i = 0; i < elemList.size(); i++)
 				mFixedPressureRows.insert(elemList[i]);
 		}
-		
-		// everything below is for pressure BCs
-		//if (!mConfig.mUsePressureBCs)
-		//	return;
-		//mNumFixedP = mFixedPressureRows.size();
-
-		//// reshuffle pressure rows so that fixed values are at the end
-		//mPressureMap.clear();
-		//mInvPressureMap.resize(mNumPressureNodes);
-		//// first add the non-boundary nodes
-		//for (uint32 i = 0; i < mNumPressureNodes; i++)
-		//{
-		//	if (!NodeIsOnBoundary(i)) // this search may be fast, but it's not the most efficient way to do this
-		//	{
-		//		mPressureMap.push_back(i);
-		//		mInvPressureMap[i] = mPressureMap.size() - 1;
-		//	}
-		//}
-		//// then add all the boundary nodes
-		//for (auto it = mFixedPressureRows.begin(); it != mFixedPressureRows.end(); it++)
-		//{
-		//	mPressureMap.push_back(*it);
-		//	mInvPressureMap[*it] = mPressureMap.size() - 1;
-		//}
-
-		//// recompute compliance matrix (as it is smaller now)
-		//AssembleComplianceMatrix();
-		//AssembleJacobianMatrix(mVolJacobianMatrix, false);
 	}
 
 	EigenVector FemPhysicsLinearIncompressible::ComputeTotalForce(bool corotational)
@@ -264,7 +228,6 @@ namespace FEM_SYSTEM
 		}
 
 		EigenVector f = GetEigenVector(mBodyForces) - mElasticForce;
-		//if (!mConfig.mUsePressureBCs)
 		{
 			ComputeTractionForces();
 			if (mTractionForces.size() == mBodyForces.size())
@@ -330,9 +293,8 @@ namespace FEM_SYSTEM
 		if (mSystemMatrix.rows() == 0)
 		{
 			mSystemMatrix = h * h * J * Minv * Jt;
-#ifndef INCOMPRESSIBLE
-			mSystemMatrix += mVolComplianceMatrix;
-#endif
+			if (!mConfig.mFullIncompressilble)
+				mSystemMatrix += mVolComplianceMatrix;
 			mSolver.Init(mSystemMatrix, LST_LLT);
 		}
 		EigenVector lambda = mSolver.Solve(b);
@@ -352,6 +314,7 @@ namespace FEM_SYSTEM
 		}
 	}
 
+	// experimental
 	void SolveUzawa(const EigenMatrix& A, const EigenMatrix& J, const EigenMatrix& C, 
 		const EigenVector& a, const EigenVector& b, EigenVector& dv)
 	{
@@ -408,23 +371,17 @@ namespace FEM_SYSTEM
 			mSystemMatrix.block(0, 0, numDofs, numDofs) = M;
 			mSystemMatrix.block(0, numDofs, numDofs, numPNodes) = h * mVolJacobianMatrix.transpose();
 			mSystemMatrix.block(numDofs, 0, numPNodes, numDofs) = h * mVolJacobianMatrix;
-#ifndef INCOMPRESSIBLE
-			mSystemMatrix.block(numDofs, numDofs, numPNodes, numPNodes) = -mVolComplianceMatrix;
-#endif
+			if (!mConfig.mFullIncompressilble)
+				mSystemMatrix.block(numDofs, numDofs, numPNodes, numPNodes) = -mVolComplianceMatrix;
 			mSolver.Init(mSystemMatrix, LST_LDLT);
 		}
 	
 		EigenVector dv, p;
-#ifndef UZAWA
 		EigenVector sol = mSolver.Solve(rhs);
 		dv = sol.head(numDofs);
 		p = sol.tail(numPNodes);
-#else
-		SolveUzawa(mMassMatrix, mVolJacobianMatrix, mVolComplianceMatrix, a, b, dv);
-#endif
+
 		Vector3Array deltas = GetStdVector(dv);
-		//EigenVector f = -h * mInverseMassMatrix * mVolJacobianMatrix.transpose() * p;
-		//Vector3Array deltas = GetStdVector(f);
 		for (size_t i = 0; i < numNodes; i++)
 		{
 			mVelocities[i] += deltas[i];
@@ -460,15 +417,11 @@ namespace FEM_SYSTEM
 		{
 			mSystemMatrix.resize(size, size);
 			mSystemMatrix.setZero();
-			//EigenMatrix K = mDeviatoricStiffnessMatrix;
-			//if (mConfig.mUseImplicitPressureBCs && mTractionStiffnessMatrix.rows() > 0)
-			//	K -= mTractionStiffnessMatrix;
 			mSystemMatrix.block(0, 0, numDofs, numDofs) = EigenMatrix(mMassMatrix) + h * h * mDeviatoricStiffnessMatrix;
 			mSystemMatrix.block(0, numDofs, numDofs, numPNodes) = h * mVolJacobianMatrix.transpose();
 			mSystemMatrix.block(numDofs, 0, numPNodes, numDofs) = h * mVolJacobianMatrix;
-#ifndef INCOMPRESSIBLE
-			mSystemMatrix.block(numDofs, numDofs, numPNodes, numPNodes) = -mVolComplianceMatrix;
-#endif
+			if (!mConfig.mFullIncompressilble)
+				mSystemMatrix.block(numDofs, numDofs, numPNodes, numPNodes) = -mVolComplianceMatrix;
 			mSolver.Init(mSystemMatrix, LST_LDLT, true);
 		}
 		EigenVector sol = mSolver.Solve(rhs);
@@ -544,41 +497,6 @@ namespace FEM_SYSTEM
 		EigenVector sol;
 		{
 			PROFILE_SCOPE("IICR build S");
-#ifdef SPARSE_IICR_KKT
-			if (mSparseSysMatrix.rows() == 0)
-			{
-				mSparseSysMatrix.resize(size, size);
-				for (uint32 i = 0; i < numPNodes; i++)
-				{
-					for (uint32 j = 0; j < numPNodes; j++)
-					{
-						real val = mVolComplianceMatrix.coeff(i, j);
-						if (val != 0)
-							mSparseSysMatrix.coeffRef(numDofs + i, numDofs + j) = -flip * val;
-					}
-				}
-			}
-			uint32 offset = mNumBCs * 3;
-			for (uint32 i = 0; i < numDofs; i++)
-			{
-				for (uint32 j = 0; j < numDofs; j++)
-				{
-					real m = mMassMatrix.coeff(i, j);
-					real k = mDeviatoricStiffnessMatrix(offset + i, offset + j);
-					if (m != 0 || k != 0)
-						mSparseSysMatrix.coeffRef(i, j) = m + h * h * k;
-				}
-				for (uint32 j = 0; j < numPNodes; j++)
-				{
-					real val = J.coeff(j, i);
-					if (val != 0)
-					{
-						mSparseSysMatrix.coeffRef(numDofs + j, i) = h * val;
-						mSparseSysMatrix.coeffRef(i, numDofs + j) = flip * h * val;
-					}
-				}
-			}
-#else
 			if (mSystemMatrix.rows() == 0)
 			{
 				mSystemMatrix.resize(size, size);
@@ -588,15 +506,10 @@ namespace FEM_SYSTEM
 				+ h * h * mDeviatoricStiffnessMatrix.block(mNumBCs * 3, mNumBCs * 3, numDofs, numDofs);
 			mSystemMatrix.block(0, numDofs, numDofs, numPNodes) = flip * h * J.transpose();
 			mSystemMatrix.block(numDofs, 0, numPNodes, numDofs) = h * J;
-#endif // SPARSE_IICR_KKT
 		}
 		{
 			PROFILE_SCOPE("IICR solve");
-#ifdef SPARSE_IICR_KKT
-			mSolver.InitSparse(mSparseSysMatrix, LST_LDLT);
-#else
 			mSolver.Init(mSystemMatrix, LST_LDLT, true);
-#endif
 			sol = mSolver.Solve(rhs);
 		}
 
@@ -616,18 +529,6 @@ namespace FEM_SYSTEM
 		uint32 numNodes = GetNumFreeNodes();
 		uint32 numPNodes = GetNumPressureNodes();
 
-		//EigenVector b(GetNumElements());
-		//b.setZero();
-		//for (uint32 e = 0; e < GetNumElements(); e++)
-		//{
-		//	// compute displacements and add the contribution to the RHS
-		//	for (int j = 0; j < 4; j++)
-		//	{
-		//		uint32 globalIdx = mTetMesh->GetGlobalIndex(e, j);
-		//		Vector3R disp = !mRotationMatrices[e] * GetDeformedPosition(globalIdx) - mReferencePositions[globalIdx];
-		//		b[e] += mElementVolumes[e] * dot(mBarycentricJacobians[e].y[j], disp);
-		//	}
-		//}
 		EigenVector b;
 		ComputeErrorCorotational(b);
 
@@ -640,27 +541,18 @@ namespace FEM_SYSTEM
 
 		// form the linear system and solve it
 		BEGIN_PROFILE("Form lin sys");
-		// TODO: optimize
 		SparseMatrix J;
 		AssembleJacobianMatrix(J, true);
 		auto Jt = J.transpose();
 		EigenMatrix M = mMassMatrix + h * h * Kcr;
 		EigenMatrix Minv = M.inverse();
-		//EigenMatrix Minv = mInverseImplicitMatrix;
 		EigenMatrix JMinv = J * Minv;
 		EigenVector rhs = b + h * JMinv * a;
 		EigenMatrix S = h * h * JMinv * Jt + EigenMatrix(mVolComplianceMatrix);
 		END_PROFILE();
 
 		BEGIN_PROFILE("Solve")
-#ifdef CG_SOLVER
-		//Eigen::ConjugateGradient<SparseMatrix> solver;
-		Eigen::ConjugateGradient<EigenMatrix, Eigen::Lower | Eigen::Upper> solver;
-		solver.setMaxIterations(15);
-		solver.compute(S);
-#else
 		auto solver = S.llt();
-#endif
 		
 		EigenVector p = solver.solve(rhs);
 		END_PROFILE();
@@ -734,7 +626,6 @@ namespace FEM_SYSTEM
 
 	void FemPhysicsLinearIncompressible::AssembleDeviatoricStiffnessMatrix()
 	{
-		//MEASURE_TIME("IICR assemble");
 		size_t numNodes = GetNumFreeNodes(); // remove the first 4 entries which are fixed (hack)
 		size_t numDofs = numNodes * 3;
 		mDeviatoricStiffnessMatrix.resize(numDofs, numDofs);
@@ -895,7 +786,6 @@ namespace FEM_SYSTEM
 	template<class MATRIX>
 	void FemPhysicsLinearIncompressible::AssembleJacobianMatrix(MATRIX& J, bool corot)
 	{
-		//MEASURE_TIME("assemble J");
 		PROFILE_SCOPE("IICR assemble J");
 		uint32 numNodes = GetNumFreeNodes();
 		uint32 nDof = NUM_POS_COMPONENTS * numNodes; // position DOFs
@@ -1283,9 +1173,8 @@ namespace FEM_SYSTEM
 			mSystemMatrix.resize(size, size);
 			mSystemMatrix.setZero();
 			mSystemMatrix.block(0, 0, numDofs, numDofs) = mMassMatrix;
-#ifndef INCOMPRESSIBLE
-			mSystemMatrix.block(numDofs, numDofs, numPNodes, numPNodes) = -mVolComplianceMatrix;
-#endif
+			if (!mConfig.mFullIncompressilble)
+				mSystemMatrix.block(numDofs, numDofs, numPNodes, numPNodes) = -mVolComplianceMatrix;
 		}
 		
 		mSystemMatrix.block(0, numDofs, numDofs, numPNodes) = h * J.transpose();
