@@ -41,10 +41,10 @@ namespace FEM_SYSTEM
 	class FemPhysicsLinearElasticity : public FemPhysicsLinear
 	{
 	public:
-		FemPhysicsLinearElasticity(std::vector<Tetrahedron>& tetrahedra,
+		FemPhysicsLinearElasticity(std::vector<Tet>& tetrahedra,
 			std::vector<Node>& nodes, const FemConfig& config);
 		void Step(real dt) override;
-		void SolveEquilibrium(float) override;
+		void SolveEquilibrium(float);
 
 	private:
 		void StepExplicit(real h);
@@ -60,6 +60,7 @@ namespace FEM_SYSTEM
 
 	protected:
 		EigenMatrix mStiffnessMatrix; // stiffness matrix
+		EigenMatrix mBCStiffnessMatrix; // stiffness matrix block used for BCs
 		Eigen::SparseLU<SparseMatrix> mSparseLU; // the LU decomposition of M
 		
 		// for implicit integration

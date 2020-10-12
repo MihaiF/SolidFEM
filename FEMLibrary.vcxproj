@@ -160,6 +160,7 @@
     <ClInclude Include="Engine\Profiler.h" />
     <ClInclude Include="Engine\Types.h" />
     <ClInclude Include="Engine\Utils.h" />
+    <ClInclude Include="Include\FemCollisions.h" />
     <ClInclude Include="Include\FemDataStructures.h" />
     <ClInclude Include="Include\FemPhysicsBase.h" />
     <ClInclude Include="Include\FemPhysicsCorotationalElasticity.h" />
@@ -177,6 +178,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="FEMLibrary.cpp" />
+    <ClCompile Include="Source\FemPhysicsBase.cpp" />
     <ClCompile Include="Source\FemPhysicsCorotationalElasticity.cpp" />
     <ClCompile Include="Source\FemPhysicsLinear.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">NotUsing</PrecompiledHeader>

@@ -30,10 +30,6 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-// C++ references
-#include <iostream>
-#include <chrono>
-
 // Custom references
 #include "FemPhysicsCorotationalElasticity.h"
 #include "MeshFactory.h"
@@ -47,9 +43,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace FEM_SYSTEM
 {
-	const size_t NUM_POS_COMPONENTS = 3;
-
-	FemPhysicsCorotationalElasticity::FemPhysicsCorotationalElasticity(std::vector<Tetrahedron>& tetrahedra,
+	FemPhysicsCorotationalElasticity::FemPhysicsCorotationalElasticity(std::vector<Tet>& tetrahedra,
 		std::vector<Node>& nodes, const FemConfig& config)
 		: FemPhysicsLinear(tetrahedra, nodes, config)
 	{
@@ -81,10 +75,12 @@ namespace FEM_SYSTEM
 			real h = dt / mNumSteps;
 			for (int i = 0; i < mNumSteps; i++)
 			{
+				mPreviousPositions = mDeformedPositions; // for collisions
 				if (mSimType == ST_EXPLICIT)
 					StepExplicit(h);
 				else if (mSimType == ST_IMPLICIT)
 					StepImplicit(h);
+				HandleCollisions(h);
 			}
 			CheckForInversion();
 		}
@@ -221,7 +217,7 @@ namespace FEM_SYSTEM
 #endif // LOG_TIMES
 	}
 
-	void FemPhysicsCorotationalElasticity::ComputeElasticForces(EigenVector& elasticForce)
+	void FemPhysicsCorotationalElasticity::ComputeElasticForces(EigenVector& elasticForce) const
 	{
 		PROFILE_SCOPE("CR compute f");
 		size_t numNodes = GetNumFreeNodes(); // remove the first 4 entries which are fixed (hack)

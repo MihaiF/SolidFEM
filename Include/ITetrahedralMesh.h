@@ -1,7 +1,7 @@
 /*
 BSD 3-Clause License
 
-Copyright (c) 2019, Mihai Francu
+Copyright (c) 2020, Mihai Francu
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -30,46 +30,25 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-// Tester.cpp : This file contains the 'main' function. Program execution begins and ends there.
-//
+#pragma once
 
-#include "pch.h"
-#include <iostream>
-#include "../Include/FemPhysicsLinearElasticity.h"
+#include <Engine/Types.h>
+#include "StridedVector.h"
 
-using namespace FEM_SYSTEM;
-
-int main()
+namespace FEM_SYSTEM
 {
-    std::cout << "Hello World!\n"; 
-	FemPhysicsBase* femPhysics = nullptr;
-	
-	std::vector<Tet> tets;
-	std::vector<Node> nodes;
-	FemConfig config;
-	//femPhysics = new FemPhysicsLinearElasticity(tets, nodes, config);
-	//delete femPhysics;
-
-	tets.resize(1);
-	nodes.resize(4);
-	//femPhysics = new FemPhysicsLinearElasticity(tets, nodes, config);
-	//delete femPhysics;
-
-	tets[0].idx[0] = 0;
-	tets[0].idx[1] = 1;
-	tets[0].idx[2] = 2;
-	tets[0].idx[3] = 3;
-	femPhysics = new FemPhysicsLinearElasticity(tets, nodes, config);
-	delete femPhysics;
+	class ITetrahedralMesh
+	{
+	public:
+		virtual void InstanceWith(int order, int noPoints, StridedVector<uint32> connectivity, int noElements) = 0;
+		virtual int GetNumNodes() const = 0;
+		virtual int GetNumNodesPerElement() const = 0;
+		virtual int GetNumElements() const = 0;
+		virtual int GetNodesPerEdge(int) const = 0;
+		virtual int GetNodesPerFace(int) const = 0;
+		virtual int GetGlobalIndex(int eidx, int lidx) = 0;
+		virtual int* GetIJKL(int lidx) = 0;
+		virtual int GetOrder() const = 0;
+	};
 }
 
-// Run program: Ctrl + F5 or Debug > Start Without Debugging menu
-// Debug program: F5 or Debug > Start Debugging menu
-
-// Tips for Getting Started: 
-//   1. Use the Solution Explorer window to add/manage files
-//   2. Use the Team Explorer window to connect to source control
-//   3. Use the Output window to see build output and other messages
-//   4. Use the Error List window to view errors
-//   5. Go to Project > Add New Item to create new code files, or Project > Add Existing Item to add existing code files to the project
-//   6. In the future, to open this project again, go to File > Open > Project and select the .sln file

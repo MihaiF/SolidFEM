@@ -33,30 +33,59 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef FEM_PHYSICS_BASE_H
 #define FEM_PHYSICS_BASE_H
 #include "FemDataStructures.h"
-#include "TetrahedralMesh.h"
+#include "FemCollisions.h"
+#include <Engine/Utils.h>
 
 namespace FEM_SYSTEM
 {
-	const float unit = 100.f;
-
 	class FemPhysicsBase
 	{
+	public:
+		enum Axes
+		{
+			AXIS_X = 1,
+			AXIS_Y = 2,
+			AXIS_Z = 4,
+		};
+
 	public:
 		FemPhysicsBase(const FemConfig& config);
 		virtual ~FemPhysicsBase() {}
 
 		virtual void Step(real dt) = 0;
-		virtual Vector3R GetDeformedPosition(uint32 idx) const = 0;
-		virtual uint32 GetNumNodes() const = 0;
-		virtual void SolveEquilibrium(float) { }
-		virtual void SetExternalForces(const std::vector<Vector3R>& forces) { }
-		virtual void SetBoundaryConditionsSurface(const std::vector<uint32>& triangleList, const std::vector<uint32>& elemList, real pressure) { }
-		virtual bool IsNodeFixed(uint32 i) const = 0;
-		virtual TetrahedralMesh<uint32>* GetTetMesh() = 0;
+		
+		void HandleCollisions(real dt);
 
-		real GetLameFirstParam() const 
+		// interface getters/setters
+		virtual Vector3R GetDeformedPosition(uint32 idx) const = 0;
+		virtual void SetDeformedPosition(uint32 idx, Vector3R val) { ASSERT(false) };
+		virtual Vector3R GetInitialPosition(uint32 idx) const { ASSERT(false); return sZero; }
+		virtual Vector3R GetVelocity(uint32 idx) const { ASSERT(false); return sZero; }
+		virtual uint32 GetNumNodes() const = 0;
+		virtual uint32 GetNumFreeNodes() const { ASSERT(false); return 0; }
+		virtual uint32 GetNumLocalNodes() const { ASSERT(false); return 4; }
+		virtual uint32 GetNumElements() const { ASSERT(false); return 0; }
+		virtual void SetExternalForces(const std::vector<Vector3R>& forces) { ASSERT(false); }
+		virtual void SetBoundaryConditionsSurface(const std::vector<uint32>& triangleList, real pressure) { ASSERT(false); }
+		virtual bool IsNodeFixed(uint32 i) const = 0;
+		virtual Matrix3R GetBarycentricJacobianMatrix(uint32 e) const { ASSERT(false); return Matrix3R(); }
+		virtual real GetElementInitialVolume(uint32 e) const { ASSERT(false); return 0; }
+		virtual uint32 GetGlobalIndex(uint32 e, uint32 l) const { ASSERT(false); return 0; }
+		virtual uint32 GetGlobalOriginalIndex(uint32 e, uint32 l) const { ASSERT(false); return 0; }
+		virtual real GetTotalVolume() const = 0;
+		
+		// interface methods
+		virtual real ComputeEnergy(int level) const { ASSERT(false); return 0; }
+		virtual void UpdatePositions(std::vector<Node>& nodes) { ASSERT(false); }
+		virtual void ComputeDeformationGradient(uint32 e, Matrix3R& F) const { ASSERT(false); }
+
+		// base class methods
+		MaterialModelType GetMaterial() const { return mMaterial; }
+		real GetYoungsModulus() const { return mYoungsModulus; }
+		
+		real GetLameFirstParam() const
 		{
-			return real(mYoungsModulus * mPoissonRatio / (1.0 + mPoissonRatio) / (1.0 - 2.0 * mPoissonRatio));
+			return mLameLambda;
 		}
 
 		real GetShearModulus() const // or Lame second param
@@ -66,45 +95,83 @@ namespace FEM_SYSTEM
 
 		real GetBulkModulus() const
 		{
-			return real(mYoungsModulus / (1.0 - 2.0 * mPoissonRatio) / 3.0);
+			return 1 / mInvBulkModulus;
 		}
+
+		real GetInverseBulkModulus()
+		{
+			return mInvBulkModulus;
+		}
+
+		real GetForceFraction() const { return mForceFraction; }
+
+		void AddDirichletBC(uint32 i, uint32 axes);
+
+		void GetNodeVolumetricStrains(std::vector<real>& volStrains) const;
+
+		bool CheckForInversion(int verbose = 0);
+
+		FemCollision* GetCollision() { return mFemCollision; }
+
+	protected:
+		void AssembleDynamicContributions();
 
 	protected:
 		MethodType mMethodType;
 		real mYoungsModulus, mPoissonRatio;
+		real mLameLambda;
+		real mInvBulkModulus; // only used for mixed FEM
 		Matrix3R mNormalElasticityMatrix;
 		Vector3R mGravity;
 		int mNumSteps = 1;
 		real mDensity; // body density
 		SimulationType mSimType;
+		MaterialModelType mMaterial = MMT_LINEAR;
+		uint32 mOuterIterations = 10;
+		uint32 mInnerIterations = 100;
+		real mContactStiffness;
+		real mDirichletStiffness;
+		
+		// collisions
+		bool mHasCollisions = false;
+		FemCollision* mFemCollision;
+
+		// Dirichlet BCs
+		uint32 mNumBCs; // Dirichlet BC nodes
+		std::vector<uint32> mReshuffleMap; // mapping from original nodes to shuffled ones
 
 		// for applying external loads
 		real mForceFraction = 0; // force application fraction
 		real mForceStep = 0.1f;
+
+		// variable Dirichlet BCs
+		std::vector<uint32> mDirichletIndices;
+		std::vector<uint32> mDirichletAxes;
+
+		// Neumann/pressure BCs
+		bool mUseImplicitPressureForces = false; // compute a stiffness matrix due to the variation of the normal
+		std::vector<uint32> mTractionSurface; // triangle list of Neumann boundary
+		real mAppliedPressure;
+		EigenMatrix mTractionStiffnessMatrix;
+
+		static Vector3R sZero;
+
+		real mAbsNewtonResidualThreshold;
+
+		bool mVerbose = false;
+
+		SparseMatrix mContactJacobian;
+		SparseMatrix mDirichletJacobian;
+
+		real mTotalInitialVol;
 	};
 
-	inline FemPhysicsBase::FemPhysicsBase(const FemConfig& config)
-		: mMethodType(config.mType)
-		, mYoungsModulus(config.mYoungsModulus / unit)
-		, mPoissonRatio(config.mPoissonRatio)
-		, mGravity(0, config.mGravity * unit, 0)
-		, mNumSteps(config.mNumSubsteps)
-		, mDensity(config.mDensity / (unit * unit * unit))
-		, mSimType(config.mSimType)
-		, mForceStep(config.mForceApplicationStep)
+	inline void FemPhysicsBase::AddDirichletBC(uint32 i, uint32 axes)
 	{
-		// elastic params
-		real omn = 1.f - mPoissonRatio;
-		real om2n = 1.f - 2 * mPoissonRatio;
-		real s = mYoungsModulus / (1.f + mPoissonRatio); // this is actually 2 * mu, i.e. twice the shear modulus
-		real f = s / om2n;
-		// the constitutive relation matrix for normal stresses/strains [Mueller]
-		mNormalElasticityMatrix = f * Matrix3R(omn, mPoissonRatio, mPoissonRatio,
-			mPoissonRatio, omn, mPoissonRatio,
-			mPoissonRatio, mPoissonRatio, omn);
-		// the constitutive relation matrix for shear components is just diag(2 * mu) [Mueller]
+		uint32 idx = mReshuffleMap[i];
+		mDirichletIndices.push_back(idx);
+		mDirichletAxes.push_back(axes);
 	}
-
 } // namespace FEM_SYSTEM
 
 #endif // FEM_PHYSICS_BASE_H

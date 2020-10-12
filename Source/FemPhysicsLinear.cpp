@@ -32,8 +32,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "FemPhysicsLinear.h"
 #include "MeshFactory.h"
+#include "TetrahedralMesh.h"
 #include <Engine/Profiler.h>
-#include <iostream>
 
 #pragma warning( disable : 4244) // for double-float conversions
 #pragma warning( disable : 4267) // for size_t-uint conversions
@@ -45,7 +45,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace FEM_SYSTEM
 {
-	FemPhysicsLinear::FemPhysicsLinear(std::vector<Tetrahedron>& tetrahedra,
+	FemPhysicsLinear::FemPhysicsLinear(std::vector<Tet>& tetrahedra,
 		std::vector<Node>& nodes, const FemConfig& config)
 		: FemPhysicsBase(config)
 		, mOrder(config.mOrder)
@@ -69,23 +69,26 @@ namespace FEM_SYSTEM
 		ComputeBodyForces(mBodyForces);
 	}
 
-	void FemPhysicsLinear::CreateMeshAndDofs(std::vector<Tetrahedron>& tetrahedra, std::vector<Node>& nodes)
+	void FemPhysicsLinear::CreateMeshAndDofs(std::vector<Tet>& tetrahedra, std::vector<Node>& nodes)
 	{
 #ifdef LOG_TIMES
 		Printf(("----- FemPhysicsAnyOrderCorotationalElasticity for order " + std::to_string(order) + "\n").c_str());
 #endif // LOG_TIMES
 		// 1. Build the higher order mesh/convert to a TetrahedralMesh instance
 		// use the linear mesh stored as an array of Tetrahedron in the base class
-		StridedVector<uint16> stridedVec(&(tetrahedra[0].i[0]), (uint)tetrahedra.size(), sizeof(Tetrahedron));
+		StridedVector<uint32> stridedVec(&(tetrahedra[0].idx[0]), (uint)tetrahedra.size(), sizeof(Tet));
 
 		double mesh_time;
+		TetrahedralMesh<uint32>* tetMesh = nullptr;
 		{
 			MEASURE_TIME_P("mesh_time", mesh_time);
-			mTetMesh.reset(MeshFactory::MakeMesh<TetrahedralMesh<uint32>>(mOrder, nodes.size(), stridedVec, tetrahedra.size()));
+			tetMesh = MeshFactory::MakeMesh<TetrahedralMesh<uint32>>(mOrder, nodes.size(), stridedVec, tetrahedra.size());
+			mTetMesh.reset(tetMesh);
 		}
 
 		std::vector<Vector3R> points(nodes.size());
-		double other_time;
+		std::vector<Vector3R> points0(nodes.size());
+		double other_time = 0;
 		{
 			MEASURE_TIME_P("other_time", other_time);
 			// 2. Compute the interpolated positions
@@ -94,20 +97,23 @@ namespace FEM_SYSTEM
 			for (uint32 i = 0; i < nodes.size(); i++)
 			{
 				points[i] = nodes[i].pos;
+				points0[i] = nodes[i].pos0;
 			}
 		}
 
 		std::vector<Vector3R> interpolatedPositions(GetNumNodes());
+		std::vector<Vector3R> interpolatedPositions0(GetNumNodes());
 		double interpolate_time;
 		{
 			MEASURE_TIME_P("interpolate_time", interpolate_time);
 			// interpolate the mesh node positions (for the given order)
 			// the first resulting nodes are the same as in the linear mesh
-			MeshFactory::Interpolate(*mTetMesh, &points[0], &interpolatedPositions[0]);
+			MeshFactory::Interpolate<TetrahedralMesh<uint32>, Vector3R>(*tetMesh, &points[0], &interpolatedPositions[0]);
+			MeshFactory::Interpolate<TetrahedralMesh<uint32>, Vector3R>(*tetMesh, &points0[0], &interpolatedPositions0[0]);
 		}
 
 		std::vector<bool> fixed(GetNumNodes(), false);
-		double other_time2;
+		double other_time2 = 0;
 		{
 			MEASURE_TIME_P("other_time2", other_time2);
 			// 3. Mark all boundary nodes
@@ -119,7 +125,7 @@ namespace FEM_SYSTEM
 		}
 		other_time += other_time2;
 
-		double boundary_time;
+		double boundary_time = 0;
 		{
 			MEASURE_TIME_P("boundary_time", boundary_time);
 			// 3.5 Check the higher order nodes and ensure that the expected leftmost cantilever nodes are marked fixed
@@ -191,9 +197,30 @@ namespace FEM_SYSTEM
 		// 4. Create a index-mapping from mesh-global-index to index into the mReferencePosition and mDeformedPositions vectors
 		// - this is too allow all of the fixed nodes to be listed first in the two vectors.
 
-		double other_time3;
+		double other_time3 = 0;
 		{
 			MEASURE_TIME_P("other_time3", other_time3);
+#ifdef USE_CONSTRAINT_BCS
+			// create the reference positions - first ones are the fixed ones
+			mReferencePositions.resize(GetNumNodes());
+			mReshuffleMap.resize(GetNumNodes());
+			mReshuffleMapInv.resize(GetNumNodes());
+			for (uint32 i = 0; i < GetNumNodes(); i++)
+			{
+				mReferencePositions[i] = interpolatedPositions0[i];
+				mReshuffleMap[i] = i;
+				mReshuffleMapInv[i] = i;
+			}
+			// create a mapping with the fixed nodes first
+			for (uint32 i = 0; i < fixed.size(); i++)
+			{
+				if (fixed[i])
+				{
+					AddDirichletBC(i, AXIS_X | AXIS_Y | AXIS_Z);
+				}
+			}
+			mNumBCs = 0;
+#else
 			// create a mapping with the fixed nodes first
 			mReshuffleMapInv.clear();
 			for (uint32 i = 0; i < fixed.size(); i++)
@@ -213,26 +240,74 @@ namespace FEM_SYSTEM
 			for (uint32 i = 0; i < GetNumNodes(); i++)
 			{
 				uint32 idx = mReshuffleMapInv[i];
-				mReferencePositions[i] = interpolatedPositions[idx];
+				mReferencePositions[i] = interpolatedPositions0[idx];
 				mReshuffleMap[idx] = i;
 			}
+#endif
 
 			// 5. Copy the mReferencePositions into mDeformedPositions, to initialize it
 			// - note that mDeformedPositions does not contain the boundary/fixed nodes.
 			// create a vector of deformed positions (dofs)
 			// the first mNumBCs nodes are fixed so we only consider the remaining ones
 			mDeformedPositions.resize(GetNumFreeNodes());
-			mDeformedPositions.assign(mReferencePositions.begin() + mNumBCs, mReferencePositions.end());
+			for (uint32 i = 0; i < GetNumFreeNodes(); i++)
+			{
+				uint32 idx = mReshuffleMapInv[i + mNumBCs];
+				mDeformedPositions[i] = interpolatedPositions[idx];
+			}
 
 			// 6. Initialize the velocities vector, note that it does not consider the fixed nodes either
 			// velocities should be zero by construction
 			mVelocities.resize(GetNumFreeNodes());
 			for (uint32 i = mNumBCs; i < nodes.size(); i++)
 			{
-				mVelocities[i - mNumBCs] = nodes[i].vel;
+				int idx = mReshuffleMapInv[i];
+				mVelocities[i - mNumBCs] = nodes[idx].vel;
+			}
+
+			// initialize initial displacements vector (mostly for non-zero displacements)
+			mInitialDisplacements.resize(mNumBCs);
+			for (uint32 i = 0; i < mNumBCs; i++)
+			{
+				int idx = mReshuffleMapInv[i];
+				mInitialDisplacements[i] = interpolatedPositions[idx] - interpolatedPositions0[idx];
 			}
 		}
 		other_time += other_time3;
+	}
+
+	void FemPhysicsLinear::UpdatePositions(std::vector<Node>& nodes)
+	{
+		// re-interpolate the current positions on the potentially high-order mesh
+		std::vector<Vector3R> points(nodes.size());
+		//double other_time;
+		{
+			//MEASURE_TIME_P("other_time", other_time);
+			// 2. Compute the interpolated positions
+			// copy over the node positions of the linear mesh to a linear array
+			// TODO: could use a strided vector instead
+			for (uint32 i = 0; i < nodes.size(); i++)
+			{
+				points[i] = nodes[i].pos;
+			}
+		}
+
+		std::vector<Vector3R> interpolatedPositions(GetNumNodes());
+		//double interpolate_time;
+		{
+			//MEASURE_TIME_P("interpolate_time", interpolate_time);
+			// interpolate the mesh node positions (for the given order)
+			// the first resulting nodes are the same as in the linear mesh
+			//MeshFactory::Interpolate(*mTetMesh, &points[0], &interpolatedPositions[0]);
+			interpolatedPositions = points;
+		}
+
+		for (uint32 i = 0; i < GetNumNodes(); i++)
+		{
+			int idx = mReshuffleMapInv[i];
+			if (i < mNumBCs)
+				mInitialDisplacements[i] = interpolatedPositions[idx] - mReferencePositions[i];
+		}
 	}
 
 	void FemPhysicsLinear::ComputeBarycentricJacobian(uint32 i, Vector3R y[4])
@@ -250,7 +325,7 @@ namespace FEM_SYSTEM
 		Vector3R d3 = x3 - x0;
 		Matrix3R mat(d1, d2, d3); // this is the reference shape matrix Dm [Sifakis][Teran]
 		Matrix3R X = mat.GetInverse(); // Dm^-1
-		real vol = abs(mat.Determinant()) / 6.f; // volume of the tet
+		real vol = (mat.Determinant()) / 6.f; // volume of the tet
 		mElementVolumes[i] = vol;
 
 		// compute the gradient of the shape functions [Erleben][Mueller]
@@ -357,11 +432,11 @@ namespace FEM_SYSTEM
 		for (size_t i = 0; i < numLocalNodes; i++)
 		{
 			size_t offsetI = i * 3;
-			auto multiIndexI = mTetMesh->mIJKL + i * 4;
+			auto multiIndexI = mTetMesh->GetIJKL(i);
 			for (size_t j = 0; j < numLocalNodes; j++)
 			{
 				//if (i != j) continue;
-				auto multiIndexJ = mTetMesh->mIJKL + j * 4;
+				auto multiIndexJ = mTetMesh->GetIJKL(j);
 				uint32 c1 = Combinations(multiIndexI[0] + multiIndexJ[0], multiIndexI[0]);
 				uint32 c2 = Combinations(multiIndexI[1] + multiIndexJ[1], multiIndexI[1]);
 				uint32 c3 = Combinations(multiIndexI[2] + multiIndexJ[2], multiIndexI[2]);
@@ -446,7 +521,7 @@ namespace FEM_SYSTEM
 		}
 	}
 
-	void FemPhysicsLinear::ComputeDeformationGradient(uint32 e, Matrix3R& F)
+	void FemPhysicsLinear::ComputeDeformationGradient(uint32 e, Matrix3R& F) const
 	{
 		// compute deformed/spatial shape matrix Ds [Sifakis]
 		uint32 i0 = mTetMesh->GetGlobalIndex(e, 0);
@@ -546,17 +621,48 @@ namespace FEM_SYSTEM
 		}
 	}
 
-	void FemPhysicsLinear::SetBoundaryConditionsSurface(const std::vector<uint32>& triangleList, const std::vector<uint32>& elemList, real pressure)
+	void FemPhysicsLinear::SetBoundaryConditionsSurface(const std::vector<uint32>& triangleList, real pressure)
 	{
 		mAppliedPressure = pressure;
-		mTractionSurface.resize(triangleList.size());
+		mTractionSurface.clear();
 
-		for (uint32 i = 0; i < triangleList.size(); i++)
+		for (uint32 i = 0; i < triangleList.size(); i += 3)
 		{
-			int origIdx = triangleList[i]; // index in the original linear mesh
-			int idx = mReshuffleMap[origIdx] - mNumBCs; // index in the reshuffled displacement nodes array
-			ASSERT(idx >= 0);
-			mTractionSurface[i] = idx;
+			int idx1 = mReshuffleMap[triangleList[i]] - mNumBCs;
+			int idx2 = mReshuffleMap[triangleList[i + 1]] - mNumBCs;
+			int idx3 = mReshuffleMap[triangleList[i + 2]] - mNumBCs;
+			if (idx1 >= 0 && idx2 >= 0 && idx3 >= 0)
+			{
+				mTractionSurface.push_back(idx1);
+				mTractionSurface.push_back(idx2);
+				mTractionSurface.push_back(idx3);
+			}
+		}
+	}
+
+	void FemPhysicsLinear::AssembleTractionStiffnessMatrixFD()
+	{
+		uint32 numNodes = GetNumFreeNodes();
+		uint32 numDofs = numNodes * 3;
+		mTractionStiffnessMatrix.resize(numDofs, numDofs);
+		mTractionStiffnessMatrix.setZero();
+
+		// current pressure forces
+		ComputeTractionForces();
+		EigenVector fp0 = GetEigenVector(mTractionForces);
+
+		real eps = 1e-6;
+		for (uint32 j = 0; j < numDofs; j++)
+		{
+			mDeformedPositions[j / 3][j % 3] += eps;
+			ComputeTractionForces();
+			EigenVector fp = GetEigenVector(mTractionForces);
+			auto dfp = (1.0 / eps) * (fp - fp0);
+			for (uint32 i = 0; i < numDofs; i++)
+			{
+				mTractionStiffnessMatrix(i, j) = dfp(i);
+			}
+			mDeformedPositions[j / 3][j % 3] -= eps;
 		}
 	}
 
@@ -577,6 +683,19 @@ namespace FEM_SYSTEM
 		for (uint32 i = 0; i < mTractionForces.size(); i++)
 			mTractionForces[i].SetZero();
 
+		auto computeForce = [&](const Vector3R& p1, const Vector3R& p2, const Vector3R& p3)->Vector3R
+		{
+			Vector3R a = p2 - p1;
+			Vector3R b = p3 - p1;
+			Vector3R normal = cross(a, b);
+			real area = 0.5f * normal.Length();
+			normal.Normalize();
+
+			Vector3R traction = mAppliedPressure * normal;
+			Vector3R force = (area / 3.0f) * traction;
+			return force;
+		};
+
 		// go through all inner boundary triangles
 		for (uint32 t = 0; t < mTractionSurface.size() / 3; t++)
 		{
@@ -590,19 +709,6 @@ namespace FEM_SYSTEM
 			const Vector3R& p1 = mDeformedPositions[i1];
 			const Vector3R& p2 = mDeformedPositions[i2];
 			const Vector3R& p3 = mDeformedPositions[i3];
-
-			auto computeForce = [&](const Vector3R& p1, const Vector3R& p2, const Vector3R& p3)->Vector3R
-			{
-				Vector3R a = p2 - p1;
-				Vector3R b = p3 - p1;
-				Vector3R normal = cross(a, b);
-				real area = 0.5f * normal.Length();
-				normal.Normalize();
-
-				Vector3R traction = mAppliedPressure * normal;
-				Vector3R force = (area / 3.0f) * traction;
-				return force;
-			};
 
 			// apply traction to triangle nodes
 			Vector3R force = computeForce(p1, p2, p3);
@@ -675,32 +781,6 @@ namespace FEM_SYSTEM
 		f *= mForceFraction; // slow application of forces
 
 		return f;
-	}
-
-	bool FemPhysicsLinear::CheckForInversion()
-	{
-		const bool verbose = false;
-		bool ret = false;
-		if (verbose)
-			Printf("Check for inversion\n");
-		for (uint32 i = 0; i < GetNumElements(); i++)
-		{
-			Matrix3R F;
-			ComputeDeformationGradient(i, F);
-			real det = F.Determinant();
-			if (verbose)
-				Printf("%f\n", det);
-			if (det <= 0.f)
-			{
-				ret = true;
-				//Printf("Inverted element %d\n", i);
-			}
-		}
-
-		if (ret)
-			Printf("Inversion detected\n");
-
-		return ret;
 	}
 
 } // namespace FEM_SYSTEM

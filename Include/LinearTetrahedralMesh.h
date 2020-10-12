@@ -1,7 +1,7 @@
 /*
 BSD 3-Clause License
 
-Copyright (c) 2019, Mihai Francu
+Copyright (c) 2020, Mihai Francu
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -30,46 +30,53 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-// Tester.cpp : This file contains the 'main' function. Program execution begins and ends there.
-//
+#ifndef LINEAR_TETRAHEDRAL_MESH_H
+#define LINEAR_TETRAHEDRAL_MESH_H
 
-#include "pch.h"
-#include <iostream>
-#include "../Include/FemPhysicsLinearElasticity.h"
+// C++ references
+#include <vector>
 
-using namespace FEM_SYSTEM;
+// Custom references
+#include "StridedVector.h"
+#include "FemDataStructures.h"
+#include "ITetrahedralMesh.h"
+#include <Engine/Types.h>
 
-int main()
+namespace FEM_SYSTEM
 {
-    std::cout << "Hello World!\n"; 
-	FemPhysicsBase* femPhysics = nullptr;
-	
-	std::vector<Tet> tets;
-	std::vector<Node> nodes;
-	FemConfig config;
-	//femPhysics = new FemPhysicsLinearElasticity(tets, nodes, config);
-	//delete femPhysics;
+	class LinearTetrahedralMesh : public ITetrahedralMesh
+	{
+	public:
+		typedef uint32 mIndexType;
+		typedef int IJKLType;
 
-	tets.resize(1);
-	nodes.resize(4);
-	//femPhysics = new FemPhysicsLinearElasticity(tets, nodes, config);
-	//delete femPhysics;
+		void InstanceWith(int order, int noPoints, StridedVector<uint32> connectivity, int noElements)
+		{
+			mNumNodes = noPoints;
+			mNumElems = noElements;
+			mTets.resize(noElements);
+			for (int i = 0; i < noElements; i++)
+			{
+				uint32* gidxs = connectivity.GetAt(i);
+				for (int j = 0; j < 4; j++)
+					mTets[i].idx[j] = gidxs[j];
+			}
+		}
+		int GetNumNodes() const { return mNumNodes; }
+		int GetNumNodesPerElement() const { return 4; }
+		int GetNumElements() const { return mNumElems; }
+		int GetNodesPerEdge(int) const { return 0; }
+		int GetNodesPerFace(int) const { return 0; }
+		int GetGlobalIndex(int eidx, int lidx) { return mTets[eidx].idx[lidx]; }
+		int* GetIJKL(int lidx) { return mIJKL[lidx]; }
+		int GetOrder() const { return 1; }
 
-	tets[0].idx[0] = 0;
-	tets[0].idx[1] = 1;
-	tets[0].idx[2] = 2;
-	tets[0].idx[3] = 3;
-	femPhysics = new FemPhysicsLinearElasticity(tets, nodes, config);
-	delete femPhysics;
+	private:
+		uint32 mNumNodes;
+		uint32 mNumElems;
+		std::vector<Tet> mTets;
+		int mIJKL[4][4] = { {1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, 1} };
+	};
 }
 
-// Run program: Ctrl + F5 or Debug > Start Without Debugging menu
-// Debug program: F5 or Debug > Start Debugging menu
-
-// Tips for Getting Started: 
-//   1. Use the Solution Explorer window to add/manage files
-//   2. Use the Team Explorer window to connect to source control
-//   3. Use the Output window to see build output and other messages
-//   4. Use the Error List window to view errors
-//   5. Go to Project > Add New Item to create new code files, or Project > Add Existing Item to add existing code files to the project
-//   6. In the future, to open this project again, go to File > Open > Project and select the .sln file
+#endif // LINEAR_TETRAHEDRAL_MESH_H

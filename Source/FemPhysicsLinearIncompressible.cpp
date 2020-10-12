@@ -34,14 +34,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "MeshFactory.h"
 #include "PolarDecomposition.h"
 #include <Engine/Profiler.h>
-#include <iostream>
 
 #pragma warning( disable : 4244) // for double-float conversions
 #pragma warning( disable : 4267) // for size_t-uint conversions
 
 namespace FEM_SYSTEM
 {
-	FemPhysicsLinearIncompressible::FemPhysicsLinearIncompressible(std::vector<Tetrahedron>& tetrahedra,
+	FemPhysicsLinearIncompressible::FemPhysicsLinearIncompressible(std::vector<Tet>& tetrahedra,
 		std::vector<Node>& nodes, 
 		const FemConfig& config)
 		: FemPhysicsLinear(tetrahedra, nodes, config)
@@ -52,6 +51,7 @@ namespace FEM_SYSTEM
 		{
 			mConfig = *((Config*)config.mCustomConfig);
 			mPressureOrder = mConfig.mPressureOrder;
+			mLogConstraint = mConfig.mLogConstraint;
 		}
 
 		mNumPressureNodes = mPressureOrder == 0 ? GetNumElements() : nodes.size();
@@ -60,8 +60,8 @@ namespace FEM_SYSTEM
 		if (mPressureOrder > 0)
 		{
 			// use the linear mesh stored as an array of Tetrahedron in the base class
-			StridedVector<uint16> stridedVec(&(tetrahedra[0].i[0]), tetrahedra.size(), sizeof(Tetrahedron));
-			mPressureMesh.reset(MeshFactory::MakeMesh<TetrahedralMesh<uint32>>(mPressureOrder, nodes.size(), stridedVec, tetrahedra.size()));
+			StridedVector<uint32> stridedVec(&(tetrahedra[0].idx[0]), tetrahedra.size(), sizeof(Tet));
+			mPressureMesh.reset(MeshFactory::MakeMesh<LinearTetrahedralMesh>(mPressureOrder, nodes.size(), stridedVec, tetrahedra.size()));
 		}
 
 		AssembleDeviatoricStiffnessMatrix();
@@ -78,7 +78,7 @@ namespace FEM_SYSTEM
 		AssembleComplianceMatrix();
 		AssembleJacobianMatrix(mVolJacobianMatrix, false);
 
-		if (!mConfig.mUseKKTMatrix)
+		if ((!mConfig.mUseKKTMatrix && mSimType == ST_IMPLICIT)|| mSimType == ST_EXPLICIT)
 		{
 			EigenMatrix denseM(mMassMatrix);
 			mInverseMassMatrix = denseM.inverse();
@@ -92,11 +92,32 @@ namespace FEM_SYSTEM
 	// main stepping function
 	void FemPhysicsLinearIncompressible::Step(real dt)
 	{
+		if (mSimType == ST_STATIC)
+		{
+			if (mForceFraction == 0)
+			{
+				SolveEquilibrium(1);
+				mForceFraction = 1;
+			}
+			return;
+		}
+
+		if (mSimType == ST_QUASI_STATIC)
+		{
+			if (mForceFraction < 1)
+			{
+				mForceFraction = std::min(real(1), mForceFraction + mForceStep);
+				SolveEquilibrium(mForceFraction);
+			}
+			return;
+		}
+
 		const int numSteps = 1; // small sub-steps for stability and less dissipation
 		real h = dt / numSteps;
 		for (int i = 0; i < numSteps; i++)
 		{
-			if (mSimType != ST_IMPLICIT)
+			mPreviousPositions = mDeformedPositions; // for collisions
+			if (mSimType == ST_EXPLICIT)
 			{
 				if (!mConfig.mUseCorotational)
 				{
@@ -118,8 +139,9 @@ namespace FEM_SYSTEM
 				}
 
 			}
-			else
+			else if (mSimType == ST_IMPLICIT)
 			{
+				mForceFraction = 1;
 				if (mConfig.mUseCorotational)
 				{
 					ComputeRotationMatrices();
@@ -142,6 +164,7 @@ namespace FEM_SYSTEM
 					}
 				}
 			}
+			HandleCollisions(h);
 		}
 	}
 
@@ -211,7 +234,9 @@ namespace FEM_SYSTEM
 	EigenVector FemPhysicsLinearIncompressible::ComputeTotalForce(bool corotational)
 	{
 		if (corotational)
-			ComputeCorotationalElasticForces();
+		{
+			ComputeCorotationalElasticForces(mElasticForce);		
+		}
 		else
 		{
 			uint32 numNodes = GetNumFreeNodes();
@@ -227,7 +252,7 @@ namespace FEM_SYSTEM
 			mElasticForce = mDeviatoricStiffnessMatrix * GetEigenVector(u);
 		}
 
-		EigenVector f = GetEigenVector(mBodyForces) - mElasticForce;
+		EigenVector f = mForceFraction * GetEigenVector(mBodyForces) - mElasticForce;
 		{
 			ComputeTractionForces();
 			if (mTractionForces.size() == mBodyForces.size())
@@ -475,7 +500,7 @@ namespace FEM_SYSTEM
 		uint32 numNodes = GetNumFreeNodes();
 		uint32 numPNodes = GetNumFreePressureNodes();
 
-		EigenMatrix J;
+		SparseMatrix J;
 		AssembleJacobianMatrix(J, true);
 
 		EigenVector b;
@@ -532,7 +557,7 @@ namespace FEM_SYSTEM
 		EigenVector b;
 		ComputeErrorCorotational(b);
 
-		ComputeCorotationalElasticForces();
+		ComputeCorotationalElasticForces(mElasticForce);
 		EigenVector a = mMassMatrix * GetEigenVector(mVelocities) - h * mElasticForce + h * GetEigenVector(mBodyForces);
 
 		AssembleDeviatoricStiffnessMatrixCR();
@@ -579,12 +604,12 @@ namespace FEM_SYSTEM
 		}
 	}
 
-	void FemPhysicsLinearIncompressible::ComputeCorotationalElasticForces()
+	void FemPhysicsLinearIncompressible::ComputeCorotationalElasticForces(EigenVector& fout) const
 	{
 		size_t numNodes = GetNumFreeNodes(); // remove the first 4 entries which are fixed (hack)
 		size_t numDofs = numNodes * 3;
-		mElasticForce.resize(numDofs, 1);
-		mElasticForce.setZero();
+		fout.resize(numDofs, 1);
+		fout.setZero();
 
 		// go through all elements (tetrahedra)
 		for (size_t i = 0; i < GetNumElements(); i++)
@@ -618,7 +643,7 @@ namespace FEM_SYSTEM
 				f = mRotationMatrices[i] * f;
 				for (size_t x = 0; x < NUM_POS_COMPONENTS; x++)
 				{
-					mElasticForce[jOffset + x] += f[x];
+					fout[jOffset + x] += f[x];
 				}
 			}
 		}
@@ -630,6 +655,9 @@ namespace FEM_SYSTEM
 		size_t numDofs = numNodes * 3;
 		mDeviatoricStiffnessMatrix.resize(numDofs, numDofs);
 		mDeviatoricStiffnessMatrix.setZero();
+		std::vector<Eigen::Triplet<real>> tripletList;
+		mBCStiffnessMatrix.resize(numDofs, mNumBCs * 3);
+		mBCStiffnessMatrix.setZero();
 		mLocalStiffnessMatrices.resize(GetNumElements());
 		// go through all linear elements (tetrahedra)
 		for (size_t i = 0; i < GetNumElements(); i++)
@@ -645,7 +673,7 @@ namespace FEM_SYSTEM
 				for (size_t k = 0; k < GetNumLocalNodes(); k++)
 				{
 					size_t kGlobal = mReshuffleMap[mTetMesh->GetGlobalIndex(i, k)];
-					if (jGlobal < mNumBCs || kGlobal < mNumBCs)
+					if (jGlobal < mNumBCs)
 						continue;
 					int jOffset = (jGlobal - mNumBCs) * NUM_POS_COMPONENTS;
 					int kOffset = (kGlobal - mNumBCs) * NUM_POS_COMPONENTS;
@@ -655,12 +683,21 @@ namespace FEM_SYSTEM
 					{
 						for (size_t y = 0; y < NUM_POS_COMPONENTS; y++)
 						{
-							mDeviatoricStiffnessMatrix.coeffRef(jOffset + x, kOffset + y) += Klocal(j * NUM_POS_COMPONENTS + x, k * NUM_POS_COMPONENTS + y);
+							real val = Klocal(j * NUM_POS_COMPONENTS + x, k * NUM_POS_COMPONENTS + y);
+							if (kGlobal < mNumBCs)
+							{
+								mBCStiffnessMatrix.coeffRef(jOffset + x, kGlobal * NUM_POS_COMPONENTS + y) += val;
+							}
+							else
+							{
+								tripletList.push_back(Eigen::Triplet<real>(jOffset + x, kOffset + y, val));
+							}
 						}
 					}
 				}
 			}
 		}
+		mDeviatoricStiffnessMatrix.setFromTriplets(tripletList.begin(), tripletList.end());
 	}
 
 	void FemPhysicsLinearIncompressible::ComputeLocalDeviatoricStiffnessMatrix(uint32 i, EigenMatrix& Klocal)
@@ -678,7 +715,6 @@ namespace FEM_SYSTEM
 			-1. / 3., -1. / 3., 2. / 3.);
 		for (int j = 0; j < 4; j++)
 			Bn[j] = P * Bn[j];
-		// TODO: reuse code
 
 		// for linear FEM we can actually precompute the tangent stiffness matrix
 		real shearModulus = 0.5f * mYoungsModulus / (1.f + mPoissonRatio);
@@ -728,8 +764,7 @@ namespace FEM_SYSTEM
 	void FemPhysicsLinearIncompressible::AssembleComplianceMatrix()
 	{
 		//MEASURE_TIME("Assemble C");
-		real bulkModulus = GetBulkModulus();
-		real Cconst = 1.f / bulkModulus;
+		real invBulkModulus = GetInverseBulkModulus();
 
 		// the local compliance matrix template
 		const uint32 numLocalPressureNodes = GetNumLocalPressureNodes();
@@ -745,7 +780,7 @@ namespace FEM_SYSTEM
 				{
 					factor = i == j ? 0.1 : 0.05;
 				}
-				Clocal(i, j) = factor * Cconst;
+				Clocal(i, j) = factor * invBulkModulus;
 			}
 		}
 
@@ -753,6 +788,7 @@ namespace FEM_SYSTEM
 		uint32 numPressureNodes = GetNumFreePressureNodes();
 		mVolComplianceMatrix = SparseMatrix(numPressureNodes, numPressureNodes);
 		mVolComplianceMatrix.setZero();
+		std::vector<Eigen::Triplet<real>> triplets;
 		for (uint32 e = 0; e < GetNumElements(); e++)
 		{
 			real vol = mElementVolumes[e];
@@ -766,25 +802,53 @@ namespace FEM_SYSTEM
 					uint32 globalJ = mInvPressureMap[GetPressureGlobalIndex(e, j)];
 					if (globalJ >= numPressureNodes)
 						continue; // skip fixed pressure values
-					mVolComplianceMatrix.coeffRef(globalI, globalJ) += vol * Clocal(i, j);
+					triplets.push_back(Eigen::Triplet<real>(globalI, globalJ, vol * Clocal(i, j)));
 				}
 			}
 		}
+		mVolComplianceMatrix.setFromTriplets(triplets.begin(), triplets.end());
 	}
 
-	void FemPhysicsLinearIncompressible::ComputeLocalJacobian(uint32 e, Vector3R v[])
+	void FemPhysicsLinearIncompressible::ComputeLocalJacobian(uint32 e, Vector3R v[], bool update) const
 	{
 		if (mOrder == 1)
 		{
-			for (int i = 0; i < 4; i++)
-				v[i] = mBarycentricJacobians[e].y[i];
+			if (!update)
+			{
+				for (int i = 0; i < 4; i++)
+					v[i] = mElementVolumes[e] * mBarycentricJacobians[e].y[i];
+			}
+			else
+			{
+				const Vector3R& x0 = GetDeformedPosition(mTetMesh->GetGlobalIndex(e, 0));
+				const Vector3R& x1 = GetDeformedPosition(mTetMesh->GetGlobalIndex(e, 1));
+				const Vector3R& x2 = GetDeformedPosition(mTetMesh->GetGlobalIndex(e, 2));
+				const Vector3R& x3 = GetDeformedPosition(mTetMesh->GetGlobalIndex(e, 3));
+				Vector3R d1 = x1 - x0;
+				Vector3R d2 = x2 - x0;
+				Vector3R d3 = x3 - x0;
+				Matrix3R mat(d1, d2, d3); // this is the spatial shape matrix Dm [Sifakis][Teran03]
+
+				real factor = 1.0 / 6.0;
+				if (mLogConstraint)
+				{
+					real vol = mat.Determinant() / 6;
+					real J = vol / mElementVolumes[e];
+					factor = factor / J;
+				}
+
+				v[1] = factor * cross(d2, d3);
+				v[2] = factor * cross(d3, d1);
+				v[3] = factor * cross(d1, d2);
+
+				v[0] = -v[1] - v[2] - v[3];
+			}
 		}
 		else
 			ComputeLocalJacobianBB2(e, v);
 	}
 
-	template<class MATRIX>
-	void FemPhysicsLinearIncompressible::AssembleJacobianMatrix(MATRIX& J, bool corot)
+	void FemPhysicsLinearIncompressible::AssembleJacobianMatrix(SparseMatrix& J, bool corot, bool update)
 	{
 		PROFILE_SCOPE("IICR assemble J");
 		uint32 numNodes = GetNumFreeNodes();
@@ -803,9 +867,8 @@ namespace FEM_SYSTEM
 		int fixedCounter = 0;
 		for (uint32 e = 0; e < GetNumElements(); e++)
 		{
-			real vol = mElementVolumes[e];
 			Vector3R v[10];
-			ComputeLocalJacobian(e, v);
+			ComputeLocalJacobian(e, v, update);
 
 			if (corot)
 			{
@@ -839,27 +902,27 @@ namespace FEM_SYSTEM
 					int baseCol = (globalK - mNumBCs) * NUM_POS_COMPONENTS;
 					if (mOrder == 2 && mPressureOrder == 1)
 					{
-						MultiIndex C = mPressureMesh->mIJKL + j * 4;
+						MultiIndex C = mPressureMesh->GetIJKL(j);
 						Vector3R v;
 						for (int n = 0; n < 4; n++)
 						{
-							MultiIndex A = mTetMesh->mIJKL + k * 4;
+							MultiIndex A = mTetMesh->GetIJKL(k);
 							if (A.Decrement(n))
 								v += 0.2f * ComputeMultiIndexSumFactor(1, C, A) * mBarycentricJacobians[e].y[n];
 						}
 						if (corot)
 							v = mRotationMatrices[e] * v;
 						for (int l = 0; l < NUM_POS_COMPONENTS; l++)
-							J.coeffRef(globalJ, baseCol + l) += vol * v[l];
+							J.coeffRef(globalJ, baseCol + l) += v[l];
 					}
 					else
 					{
 						for (int l = 0; l < NUM_POS_COMPONENTS; l++)
 						{
 							if (globalJ >= numPNodes)
-								mFixedJacobian.coeffRef(globalJ - numPNodes, baseCol + l) += factor * vol * Jlocal(0, k * NUM_POS_COMPONENTS + l);
+								mFixedJacobian.coeffRef(globalJ - numPNodes, baseCol + l) += factor * Jlocal(0, k * NUM_POS_COMPONENTS + l);
 							else
-								J.coeffRef(globalJ, baseCol + l) += factor * vol * Jlocal(0, k * NUM_POS_COMPONENTS + l);
+								J.coeffRef(globalJ, baseCol + l) += factor * Jlocal(0, k * NUM_POS_COMPONENTS + l);
 						}
 					}
 				}
@@ -889,8 +952,8 @@ namespace FEM_SYSTEM
 		{
 			for (uint32 j = 0; j < GetNumLocalNodes(); j++)
 			{
-				int* multiIndexI = mTetMesh->mIJKL + i * 4;
-				int* multiIndexJ = mTetMesh->mIJKL + j * 4;
+				int* multiIndexI = mTetMesh->GetIJKL(i);
+				int* multiIndexJ = mTetMesh->GetIJKL(j);
 				Matrix3R Kn(0), Ks(0);
 				for (uint32 c = 0; c < NUM_BARYCENTRIC_COMPONENTS; c++)
 				{
@@ -936,8 +999,8 @@ namespace FEM_SYSTEM
 		{
 			for (uint32 j = 0; j < GetNumLocalNodes(); j++)
 			{
-				int* multiIndexI = mTetMesh->mIJKL + i * 4;
-				int* multiIndexJ = mTetMesh->mIJKL + j * 4;
+				int* multiIndexI = mTetMesh->GetIJKL(i);
+				int* multiIndexJ = mTetMesh->GetIJKL(j);
 				Matrix3R Kn(0);
 				for (uint32 c = 0; c < NUM_BARYCENTRIC_COMPONENTS; c++)
 				{
@@ -969,14 +1032,14 @@ namespace FEM_SYSTEM
 		}
 	}
 
-	void FemPhysicsLinearIncompressible::ComputeLocalJacobianBB2(uint32 elem, Vector3R v[10])
+	void FemPhysicsLinearIncompressible::ComputeLocalJacobianBB2(uint32 elem, Vector3R v[10]) const
 	{
 		for (int A = 0; A < 10; A++)
 		{
 			v[A].SetZero();
 			for (int n = 0; n < 4; n++)
 			{
-				MultiIndex B = mTetMesh->mIJKL + A * 4;
+				MultiIndex B = mTetMesh->GetIJKL(A);
 				if (B.Decrement(n))
 					v[A] += mBarycentricJacobians[elem].y[n];
 			}
@@ -1034,7 +1097,7 @@ namespace FEM_SYSTEM
 
 	void FemPhysicsLinearIncompressible::StepUnconstrainedCorotational(real h)
 	{
-		ComputeCorotationalElasticForces();
+		ComputeCorotationalElasticForces(mElasticForce);
 		EigenVector sol = mInverseMassMatrix * (GetEigenVector(mBodyForces) - mElasticForce);
 		Vector3Array aext = GetStdVector(sol);
 
@@ -1046,7 +1109,7 @@ namespace FEM_SYSTEM
 		}
 	}
 
-	void FemPhysicsLinearIncompressible::ComputeErrorCorotational(EigenVector& b, const EigenMatrix* J)
+	void FemPhysicsLinearIncompressible::ComputeErrorCorotational(EigenVector& b, const SparseMatrix* J) const
 	{
 		if (J != nullptr)
 		{
@@ -1094,11 +1157,11 @@ namespace FEM_SYSTEM
 						sum = 0;
 						for (uint32 k = 0; k < GetNumLocalNodes(); k++)
 						{
-							MultiIndex C = mPressureMesh->mIJKL + j * 4;
+							MultiIndex C = mPressureMesh->GetIJKL(j);
 							Vector3R v;
 							for (int n = 0; n < 4; n++)
 							{
-								MultiIndex A = mTetMesh->mIJKL + k * 4;
+								MultiIndex A = mTetMesh->GetIJKL(k);
 								if (A.Decrement(n))
 									v += 0.2f * ComputeMultiIndexSumFactor(1, C, A) * mBarycentricJacobians[e].y[n];
 							}							
@@ -1117,7 +1180,7 @@ namespace FEM_SYSTEM
 		uint32 numNodes = GetNumFreeNodes();
 
 		// form the linear system and solve it
-		EigenMatrix J;
+		SparseMatrix J;
 		AssembleJacobianMatrix(J, true);
 		auto Jt = J.transpose();
 
@@ -1155,7 +1218,7 @@ namespace FEM_SYSTEM
 		uint32 numNodes = GetNumFreeNodes();
 		uint32 numPNodes = GetNumPressureNodes();
 
-		EigenMatrix J;
+		SparseMatrix J;
 		AssembleJacobianMatrix(J, true);
 
 		EigenVector b;

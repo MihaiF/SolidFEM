@@ -38,13 +38,15 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 // Custom references
 #include "StridedVector.h"
+#include "ITetrahedralMesh.h"
 #include <Engine/Types.h>
 #include <Engine/Utils.h>
 
 namespace FEM_SYSTEM
 {
 	template<class IndexType>
-	class TetrahedralMesh {
+	class TetrahedralMesh : public ITetrahedralMesh
+	{
 	public:
 
 		// Typedefs
@@ -53,9 +55,9 @@ namespace FEM_SYSTEM
 		typedef std::tuple<IndexType, IndexType, IndexType, IndexType> tuple4IndexType;
 		typedef IndexType mIndexType;
 
-		// 'unsigned _int8' ensures that we support an order up to 255
+		// 'uint8' ensures that we support an order up to 255
 		// -> I,J,K,L are always \in [0, order]
-		//typedef unsigned _int8 IJKLType;
+		//typedef uint8 IJKLType;
 		typedef int IJKLType; // TODO need to fix MultiIndex before anything but int can be used
 
 		struct CompressedElement
@@ -77,9 +79,9 @@ namespace FEM_SYSTEM
 
 			// TODO: use std::bitset instead of raw bits, ex std::bitset<18>? Depends, are there any performance advantages?
 			// -> Need performance tests to evaluate that.
-			unsigned _int8 edge_reverse_mask : 6;
-			unsigned _int8 face_bucketflip_mask : 4;
-			unsigned _int8 face_rotation_mask : 8;
+			uint8 edge_reverse_mask : 6;
+			uint8 face_bucketflip_mask : 4;
+			uint8 face_rotation_mask : 8;
 
 			CompressedElement()
 			{
@@ -119,7 +121,7 @@ namespace FEM_SYSTEM
 				p_gidx = (IndexType*)((char*)p_gidx + sizeof(IndexType)*elidx);
 				*gidx = *p_gidx;
 
-				*reverse = (edge_reverse_mask >> elidx) & (unsigned _int8)1;
+				*reverse = (edge_reverse_mask >> elidx) & (uint8)1;
 			}
 
 			// elidx \in [0,5]
@@ -133,7 +135,7 @@ namespace FEM_SYSTEM
 				*p_gidx = gidx;
 
 				reverse = !!reverse; // Ensure that reverse \in [0,1], really needed?
-				edge_reverse_mask = edge_reverse_mask & ~(1 << elidx) | ((unsigned _int8)reverse << elidx);
+				edge_reverse_mask = edge_reverse_mask & ~(1 << elidx) | ((uint8)reverse << elidx);
 			}
 
 			// flidx \in [0,3]
@@ -146,8 +148,8 @@ namespace FEM_SYSTEM
 				p_gidx = (IndexType*)((char*)p_gidx + sizeof(IndexType)*flidx);
 				*gidx = *p_gidx;
 
-				*rotations = (face_rotation_mask >> (flidx * 2)) & (unsigned _int8)3;
-				*bucketflip = (face_bucketflip_mask >> flidx) & (unsigned _int8)1;
+				*rotations = (face_rotation_mask >> (flidx * 2)) & (uint8)3;
+				*bucketflip = (face_bucketflip_mask >> flidx) & (uint8)1;
 			}
 
 			// flidx \in [0,3]
@@ -164,9 +166,9 @@ namespace FEM_SYSTEM
 				p_gidx = (IndexType*)((char*)p_gidx + sizeof(IndexType)*flidx);
 				*p_gidx = gidx;
 
-				face_rotation_mask = (face_rotation_mask & ~(3 << (flidx * 2))) | ((unsigned _int8)rotations << (flidx * 2));
+				face_rotation_mask = (face_rotation_mask & ~(3 << (flidx * 2))) | ((uint8)rotations << (flidx * 2));
 				bucketflip = !!bucketflip; // Ensure that bucketflip \in [0,1], really needed?
-				face_bucketflip_mask = face_bucketflip_mask & ~(1 << flidx) | ((unsigned _int8)bucketflip << flidx);
+				face_bucketflip_mask = face_bucketflip_mask & ~(1 << flidx) | ((uint8)bucketflip << flidx);
 			}
 
 			IndexType GetBodyNode()
@@ -183,16 +185,16 @@ namespace FEM_SYSTEM
 		TetrahedralMesh();
 		~TetrahedralMesh();
 
-		void InstanceWith(int order, int noPoints, StridedVector<uint16> connectivity, int noElements);
+		void InstanceWith(int order, int noPoints, StridedVector<uint32> connectivity, int noElements);
 
-		IndexType GetGlobalIndex(int eidx, int nidx);
+		int GetGlobalIndex(int eidx, int nidx);
 
-		int GetNumNodes();
-		int GetNumElements();
-		int GetNumNodesPerElement();
+		int GetNumNodes() const;
+		int GetNumElements() const;
+		int GetNumNodesPerElement() const;
 		int GetNumLinearNodes();
 
-		int GetOrder();
+		int GetOrder() const;
 		IJKLType* GetIJKL(int lidx);
 
 		// <gidx, eidx, lidx>
@@ -216,12 +218,12 @@ namespace FEM_SYSTEM
 			return v;
 		}
 
-		static int GetNodesPerEdge(int order)
+		int GetNodesPerEdge(int order) const
 		{
 			return std::max(order - 1, 0);
 		}
 
-		static int GetNodesPerFace(int order)
+		int GetNodesPerFace(int order) const
 		{
 			if (order > 0)
 			{
@@ -253,7 +255,7 @@ namespace FEM_SYSTEM
 		IndexType GetGlobalIndexFace(int eidx, int nidx);
 		IndexType GetGlobalIndexBody(int eidx, int nidx);
 
-		void BuildHigherOrderMesh(int noPoints, StridedVector<uint16> connectivity);
+		void BuildHigherOrderMesh(int noPoints, StridedVector<uint32> connectivity);
 		int GetRotatedFaceIdx(int idx, int order, int rotations);
 		int GetBucketflippedFaceIdx(int idx, int order);
 		// Including 'from' and 'to'
@@ -293,7 +295,7 @@ namespace FEM_SYSTEM
 	}
 
 	template<class IndexType>
-	void TetrahedralMesh<IndexType>::InstanceWith(int order, int noPoints, StridedVector<uint16> connectivity, int noElements)
+	void TetrahedralMesh<IndexType>::InstanceWith(int order, int noPoints, StridedVector<uint32> connectivity, int noElements)
 	{
 		// TODO assert that the selected IJKLType is big enough to handle the given order
 		// TODO either assert that this mesh has already been instanced, or cleanup before each instance
@@ -317,7 +319,7 @@ namespace FEM_SYSTEM
 	}
 
 	template<class IndexType>
-	IndexType TetrahedralMesh<IndexType>::GetGlobalIndex(int eidx, int nidx)
+	int TetrahedralMesh<IndexType>::GetGlobalIndex(int eidx, int nidx)
 	{
 		ASSERT(eidx >= 0);
 		ASSERT(eidx < mElementsInMesh);
@@ -401,19 +403,19 @@ namespace FEM_SYSTEM
 	}
 
 	template<class IndexType>
-	int TetrahedralMesh<IndexType>::GetNumNodes()
+	int TetrahedralMesh<IndexType>::GetNumNodes() const
 	{
 		return this->mNodesInMesh;
 	}
 
 	template<class IndexType>
-	int TetrahedralMesh<IndexType>::GetNumElements()
+	int TetrahedralMesh<IndexType>::GetNumElements() const
 	{
 		return this->mElementsInMesh;
 	}
 
 	template<class IndexType>
-	int TetrahedralMesh<IndexType>::GetNumNodesPerElement()
+	int TetrahedralMesh<IndexType>::GetNumNodesPerElement() const
 	{
 		return this->mNodesPrElement;
 	}
@@ -425,7 +427,7 @@ namespace FEM_SYSTEM
 	}
 
 	template<class IndexType>
-	int TetrahedralMesh<IndexType>::GetOrder()
+	int TetrahedralMesh<IndexType>::GetOrder() const
 	{
 		return this->mOrder;
 	}
@@ -613,7 +615,7 @@ namespace FEM_SYSTEM
 
 	// TODO the IJKL matrix code and build is exactly the same as the naive one, middleman?
 	template<class IndexType>
-	void TetrahedralMesh<IndexType>::BuildHigherOrderMesh(int noPoints, StridedVector<uint16> connectivity)
+	void TetrahedralMesh<IndexType>::BuildHigherOrderMesh(int noPoints, StridedVector<uint32> connectivity)
 	{
 		int nextIJKLRow = 0;
 		IndexType nextGlobalIdx = noPoints;
@@ -630,7 +632,7 @@ namespace FEM_SYSTEM
 			// The ConnectivityList entries
 			for (int eidx = 0; eidx < mElementsInMesh; eidx++)
 			{
-				uint16 *gidxs = connectivity.GetAt(eidx);
+				uint32 *gidxs = connectivity.GetAt(eidx);
 				for (int i = 0; i < 4; i++)
 				{
 					IndexType gidx = (IndexType)(*(gidxs + i));
@@ -680,7 +682,7 @@ namespace FEM_SYSTEM
 			int lidx1, lidx2; IndexType gidx1, gidx2;
 			for (int eidx = 0; eidx < mElementsInMesh; eidx++)
 			{
-				uint16 *gidxs = connectivity.GetAt(eidx);
+				uint32 *gidxs = connectivity.GetAt(eidx);
 				for (int i = 0; i < 6; i++)
 				{
 					std::tie(lidx1, lidx2) = edge_pairs[i];
@@ -773,7 +775,7 @@ namespace FEM_SYSTEM
 			int lidx1, lidx2, lidx3; IndexType gidx1, gidx2, gidx3;
 			for (int eidx = 0; eidx < mElementsInMesh; eidx++)
 			{
-				uint16 *gidxs = connectivity.GetAt(eidx);
+				uint32 *gidxs = connectivity.GetAt(eidx);
 				for (int i = 0; i < 4; i++)
 				{
 					std::tie(lidx1, lidx2, lidx3) = face_pairs[i];

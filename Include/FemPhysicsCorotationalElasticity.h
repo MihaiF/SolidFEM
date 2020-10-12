@@ -43,11 +43,11 @@ namespace FEM_SYSTEM
 	class FemPhysicsCorotationalElasticity : public FemPhysicsLinear
 	{
 	public:
-		FemPhysicsCorotationalElasticity(std::vector<Tetrahedron>& tetrahedra,
+		FemPhysicsCorotationalElasticity(std::vector<Tet>& tetrahedra,
 			std::vector<Node>& allNodes, const FemConfig& config);
 
 		void Step(real dt) override;
-		void SolveEquilibrium(float) override;
+		void SolveEquilibrium(float);
 
 	private:
 		void StepExplicit(real h);
@@ -55,7 +55,7 @@ namespace FEM_SYSTEM
 		void AssembleStiffnessMatrix();
 		void CacheLocalStiffnessMatrices();
 		void ComputeRotations();
-		void ComputeElasticForces(EigenVector& elasticForce);
+		void ComputeElasticForces(EigenVector& elasticForce) const;
 
 	private:
 		std::vector<EigenMatrix> mCachedLocalStiffnessMatrix;

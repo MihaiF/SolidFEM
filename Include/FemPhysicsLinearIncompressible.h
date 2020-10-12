@@ -35,6 +35,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "FemPhysicsLinear.h"
 #include "LinearSolver.h"
+#include "LinearTetrahedralMesh.h"
 #include <set>
 
 #pragma warning( disable : 4305)
@@ -51,15 +52,18 @@ namespace FEM_SYSTEM
 			bool mUseCorotational = false;
 			int mPressureOrder = 1;
 			bool mFullIncompressilble = false;
+			real mConstraintScale = 1; // for nonlinear
+			bool mLogConstraint = false;
+			NonlinearSolverType mSolver = NST_MIXED_NEWTON;
 		};
 
 	public:
-		FemPhysicsLinearIncompressible(std::vector<Tetrahedron>& tetrahedra,
+		FemPhysicsLinearIncompressible(std::vector<Tet>& tetrahedra,
 			std::vector<Node>& nodes,
 			const FemConfig& config);
 		void Step(real dt) override;
-		void SolveEquilibrium(float) override;
-		void SetBoundaryConditionsSurface(const std::vector<uint32>& triangleList, const std::vector<uint32>& elemList, real pressure) override;
+		void SolveEquilibrium(float);
+		void SetBoundaryConditionsSurface(const std::vector<uint32>& triangleList, const std::vector<uint32>& elemList, real pressure);
 
 		uint32 GetNumLocalPressureNodes() const { return mPressureOrder == 0 ? 1 : 4; }
 		uint32 GetNumPressureNodes() const { return mNumPressureNodes; }
@@ -77,25 +81,20 @@ namespace FEM_SYSTEM
 		void StepImplicitCorotationalKKT(real h);
 		void StepImplicitCorotationalSchur(real h);
 		
-		void AssembleDeviatoricStiffnessMatrix();
 		void AssembleComplianceMatrix();
-
-		template<class MATRIX>
-		void AssembleJacobianMatrix(MATRIX& J, bool corot);
-		void ComputeLocalJacobian(uint32 e, Vector3R v[]);
 
 		void ComputeLocalDeviatoricStiffnessMatrix(uint32 i, EigenMatrix& Klocal);
 		void ComputeLocalDeviatoricStiffnessMatrixBB2(uint32 i, EigenMatrix& Klocal);
 		void ComputeLocalVolumetricStiffnessMatrix(uint32 i, EigenMatrix& Klocal);
 		void ComputeLocalVolumetricStiffnessMatrixBB2(uint32 i, EigenMatrix& Klocal);
 
-		void ComputeLocalJacobianBB2(uint32 elem, Vector3R v[10]); // not used
+		void ComputeLocalJacobianBB2(uint32 elem, Vector3R v[10]) const; // not used
 
 		// corotational helpers
-		void ComputeCorotationalElasticForces();
+		void ComputeCorotationalElasticForces(EigenVector& fout) const;
 		void ComputeRotationMatrices();
 		void AssembleDeviatoricStiffnessMatrixCR();
-		void ComputeErrorCorotational(EigenVector& b, const EigenMatrix* J = nullptr);
+		void ComputeErrorCorotational(EigenVector& b, const SparseMatrix* J = nullptr) const;
 
 		// explicit corotational
 		void StepUnconstrainedCorotational(real h);
@@ -107,9 +106,16 @@ namespace FEM_SYSTEM
 		EigenVector ComputeTotalForce(bool corotational = false);
 
 	protected:
-		EigenMatrix mDeviatoricStiffnessMatrix; // deviatoric stiffness matrix
+		void AssembleJacobianMatrix(SparseMatrix& J, bool corot, bool update = false);
+		void AssembleDeviatoricStiffnessMatrix();
+		void ComputeLocalJacobian(uint32 e, Vector3R v[], bool update = false) const;
+
+	protected:
+		SparseMatrix mDeviatoricStiffnessMatrix; // deviatoric stiffness matrix
+		EigenMatrix mBCStiffnessMatrix; // deviatoric stiffness matrix block for BCs
 		EigenMatrix mVolumetricStiffnessMatrix; // volumetric stiffness matrix
-		
+		SparseMatrix mGeometricStiffnessMatrix;
+
 		SparseMatrix mVolComplianceMatrix;
 		SparseMatrix mVolJacobianMatrix;
 		SparseMatrix mSparseSysMatrix;
@@ -122,7 +128,7 @@ namespace FEM_SYSTEM
 		
 		uint32 mPressureOrder;
 		uint32 mNumPressureNodes;
-		std::unique_ptr<TetrahedralMesh<uint32>> mPressureMesh; // the pressure tet mesh
+		std::unique_ptr<LinearTetrahedralMesh> mPressureMesh; // the pressure tet mesh
 
 		EigenVector mElasticForce;
 		std::vector<Matrix3R> mRotationMatrices;
@@ -132,9 +138,12 @@ namespace FEM_SYSTEM
 
 		uint32 mNumFixedP; // number of prescribed pressure rows
 		EigenMatrix mFixedJacobian; // Jacobian of prescribed pressure rows
+		EigenMatrix mBCJacobian; // Jacobian of prescribed displacements
 		std::vector<uint32> mPressureMap; // map from current (shuffled) pressure nodes to original ones
 		std::vector<uint32> mInvPressureMap; // map from original pressure nodes to shuffled ones
 		std::set<uint32> mFixedPressureRows; // nodes used for Neumann BCs
+
+		bool mLogConstraint; // for nonlinear extension
 
 		friend class FemTester;
 	};

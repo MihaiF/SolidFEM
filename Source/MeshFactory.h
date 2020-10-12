@@ -45,7 +45,7 @@ namespace FEM_SYSTEM
 	class MeshFactory {
 	public:
 		template<class MeshType>
-		static MeshType* MakeMesh(uint order, uint noPoints, StridedVector<uint16> connectivity, uint noElements)
+		static MeshType* MakeMesh(uint order, uint noPoints, StridedVector<uint32> connectivity, uint noElements)
 		{
 			// TODO assert that connectivity is not null, how to?
 
@@ -55,7 +55,7 @@ namespace FEM_SYSTEM
 		}
 
 		template<class MeshType>
-		static void MakeMesh(MeshType* mesh, uint order, uint noPoints, StridedVector<uint16> connectivity, uint noElements)
+		static void MakeMesh(MeshType* mesh, uint order, uint noPoints, StridedVector<uint32> connectivity, uint noElements)
 		{
 			// TODO assert that connectivity is not null, how to?
 			// TODO assert that mesh is not null, how to?

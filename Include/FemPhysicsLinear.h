@@ -34,42 +34,21 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define FEM_PHYSICS_LINEAR_ELASTICITY_H
 
 #include "FemPhysicsBase.h"
-//#include "TetrahedralMesh.h"
+#include "ITetrahedralMesh.h"
 #include <memory>
 
 namespace FEM_SYSTEM
 {
-	typedef std::vector<Vector3R> Vector3Array;
-
-	inline Eigen::Map<EigenVector> GetEigenVector(Vector3Array& arr)
-	{
-		return Eigen::Map<EigenVector>((real*)&arr[0], arr.size() * 3, 1);
-	}
-
-	inline Vector3Array GetStdVector(EigenVector& vec)
-	{
-		size_t size = vec.size() / 3;
-		Vector3R* ptr = (Vector3R*)vec.data();
-		return Vector3Array(ptr, ptr + size);
-	}
-
 	class FemPhysicsLinear : public FemPhysicsBase
 	{
 	public:
-		enum // some integer constants
-		{
-			NUM_STRESS_COMPONENTS = 6,
-			NUM_POS_COMPONENTS = 3,
-			NUM_BARYCENTRIC_COMPONENTS = 4,
-		};
-
 		struct BarycentricJacobian
 		{
 			Vector3R y[4]; // TODO: store only 3 as y0 = -y1 - y2 - y3
 		};
 
 	public:
-		FemPhysicsLinear(std::vector<Tetrahedron>& tetrahedra,
+		FemPhysicsLinear(std::vector<Tet>& tetrahedra,
 			std::vector<Node>& allNodes, const FemConfig& config);
 
 		uint32 GetNumNodes() const override { return mTetMesh->GetNumNodes(); }
@@ -78,57 +57,76 @@ namespace FEM_SYSTEM
 		uint32 GetNumElements() const { return  mTetMesh->GetNumElements(); }
 		bool IsNodeFixed(uint32 i) const override { ASSERT(i < GetNumNodes()); return mReshuffleMap[i] < mNumBCs; }
 		Vector3R GetDeformedPosition(uint32 i) const override;
-		void SetBoundaryConditionsSurface(const std::vector<uint32>& triangleList, const std::vector<uint32>& elemList, real pressure) override;
+		void SetDeformedPosition(uint32 i, Vector3R val) override;
+		Vector3R GetPreviousPosition(uint32 i) const;
+		Vector3R GetInitialPosition(uint32 i) const override { return mReferencePositions[mReshuffleMap[i]]; }
+		Vector3R GetVelocity(uint32 i) const override;
+		void SetVelocity(uint32 i, Vector3R val);
+		void SetBoundaryConditionsSurface(const std::vector<uint32>& triangleList, real pressure) override;
 		
-		TetrahedralMesh<uint32>* GetTetMesh() { return mTetMesh.get(); }
+		ITetrahedralMesh* GetTetMesh() { return mTetMesh.get(); }
 
 		void SetExternalForces(const std::vector<Vector3R>& forces) override;
 		real GetTotalVolume() const;
+
+		Matrix3R GetBarycentricJacobianMatrix(uint32 e) const override
+		{
+			return Matrix3R(mBarycentricJacobians[e].y[1], mBarycentricJacobians[e].y[2], mBarycentricJacobians[e].y[3]);
+		}
+
+		real GetElementInitialVolume(uint32 e) const override { return mElementVolumes[e]; }
+		uint32 GetGlobalIndex(uint32 e, uint32 l) const override 
+		{
+			return mReshuffleMap[mTetMesh->GetGlobalIndex(e, l)];
+		}
+		uint32 GetGlobalOriginalIndex(uint32 e, uint32 l) const override
+		{
+			return mTetMesh->GetGlobalIndex(e, l);
+		}
+
+		void UpdatePositions(std::vector<Node>& nodes) override;
 
 	protected:		
 		void ComputeLocalMassMatrixBB2(real density, uint32 numLocalNodes, EigenMatrix& Mlocal);
 		void ComputeLocalMassMatrixBB(real density, uint32 numLocalNodes, EigenMatrix& Mlocal);
 		void AssembleMassMatrix();
-		void CreateMeshAndDofs(std::vector<Tetrahedron>& tetrahedra, std::vector<Node>& nodes);
+		void CreateMeshAndDofs(std::vector<Tet>& tetrahedra, std::vector<Node>& nodes);
 
 		void ComputeBarycentricJacobian(uint32 i, Vector3R y[4]);
 		void ComputeStrainJacobian(uint32 i, Matrix3R Bn[4], Matrix3R Bs[4]);
 		void ComputeBodyForces(Vector3Array& f);
 
-		void ComputeDeformationGradient(uint32 e, Matrix3R& F);
+		void ComputeDeformationGradient(uint32 e, Matrix3R& F) const override;
 
 		void ComputeLocalStiffnessMatrixBB(uint32 elementidx, real mu, real lambda, EigenMatrix& Klocal);
 
 		void ComputeTractionForces();
 		EigenVector ComputeLoadingForces();
 
-		bool CheckForInversion();
+		void AssembleTractionStiffnessMatrixFD();
 
 	protected:
 		uint32 mOrder;
-		std::unique_ptr<TetrahedralMesh<uint32>> mTetMesh; // the topological data
+		std::unique_ptr<ITetrahedralMesh> mTetMesh; // the topological data
 
 		std::vector<real> mElementVolumes; // signed volumes of elements
 		std::vector<Vector3R> mDeformedPositions; // nodal spatial positions
+		std::vector<Vector3R> mPreviousPositions; // used for dynamic (and quasi-static) simulations
 		std::vector<Vector3R> mReferencePositions; // nodal material positions
+		std::vector<Vector3R> mInitialDisplacements; // Dirichlet BC displacements
 		std::vector<Vector3R> mVelocities; // nodal spatial velocities
+		std::vector<real> mPressures; // nodal pressures
 		std::vector<BarycentricJacobian> mBarycentricJacobians; // the Jacobians of the sub-parametric mappings
 
-		uint32 mNumBCs;
 		SparseMatrix mMassMatrix; // mass matrix
 
 		std::vector<uint32> mReshuffleMapInv; // mapping from shuffled nodes to original ones
-		std::vector<uint32> mReshuffleMap; // mapping from original nodes to shuffled ones
 
 		Vector3Array mBodyForces;
 		Vector3Array mExternalForces;
 
 		// pressure BCs
-		real mAppliedPressure;
-		bool mUseImplicitPressureForces = false; // compute a stiffness matrix due to the variation of the normal
 		Vector3Array mTractionForces; // resulting nodal forces from Neuman BCs
-		std::vector<uint32> mTractionSurface; // triangle list of Neumann boundary
-		EigenMatrix mTractionStiffnessMatrix;
 
 	private:
 		bool mUseLumpedMass;
@@ -139,7 +137,35 @@ namespace FEM_SYSTEM
 	inline Vector3R FemPhysicsLinear::GetDeformedPosition(uint32 i) const
 	{
 		uint32 idx = mReshuffleMap[i];
-		return idx >= mNumBCs ? mDeformedPositions[idx - mNumBCs] : mReferencePositions[idx];
+		return idx >= mNumBCs ? mDeformedPositions[idx - mNumBCs] : mReferencePositions[idx] + mInitialDisplacements[idx];
+	}
+
+	inline void FemPhysicsLinear::SetDeformedPosition(uint32 i, Vector3R val)
+	{
+		uint32 idx = mReshuffleMap[i];
+		if (idx >= mNumBCs)
+			mDeformedPositions[idx - mNumBCs] = val;
+		else
+			mInitialDisplacements[idx] = val - mReferencePositions[idx];
+	}
+
+	inline Vector3R FemPhysicsLinear::GetPreviousPosition(uint32 i) const
+	{
+		uint32 idx = mReshuffleMap[i];
+		return idx >= mNumBCs ? mPreviousPositions[idx - mNumBCs] : mReferencePositions[idx] + mInitialDisplacements[idx];
+	}
+
+	inline Vector3R FemPhysicsLinear::GetVelocity(uint32 i) const
+	{
+		uint32 idx = mReshuffleMap[i];
+		return idx >= mNumBCs ? mVelocities[idx - mNumBCs] : Vector3R();
+	}
+
+	inline void FemPhysicsLinear::SetVelocity(uint32 i, Vector3R val)
+	{
+		uint32 idx = mReshuffleMap[i];
+		if (idx >= mNumBCs)
+			mVelocities[idx - mNumBCs] = val;
 	}
 
 	// the combinations formula

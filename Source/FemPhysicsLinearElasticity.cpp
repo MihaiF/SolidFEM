@@ -41,7 +41,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace FEM_SYSTEM
 {
-	FemPhysicsLinearElasticity::FemPhysicsLinearElasticity(std::vector<Tetrahedron>& tetrahedra,
+	FemPhysicsLinearElasticity::FemPhysicsLinearElasticity(std::vector<Tet>& tetrahedra,
 		std::vector<Node>& nodes, const FemConfig& config)
 		: FemPhysicsLinear(tetrahedra, nodes, config)
 	{
@@ -93,10 +93,12 @@ namespace FEM_SYSTEM
 			real h = dt / mNumSteps;
 			for (int i = 0; i < mNumSteps; i++)
 			{
+				mPreviousPositions = mDeformedPositions;
 				if (mSimType == ST_EXPLICIT)
 					StepExplicit(h);
 				else if (mSimType == ST_IMPLICIT)
 					StepImplicit(h);
+				HandleCollisions(h);
 			}
 			CheckForInversion();
 		}
@@ -109,6 +111,15 @@ namespace FEM_SYSTEM
 
 		// add the gravity forces
 		EigenVector f = ComputeLoadingForces();
+
+		// add term due to Dirichlet BCs
+#ifdef USE_COMPUTE_FORCES
+		std::vector<Vector3R> fe(GetNumFreeNodes());
+		ComputeForces(fe);
+		f += GetEigenVector(fe);
+#else
+		f -= mForceFraction * mBCStiffnessMatrix * GetEigenVector(mInitialDisplacements);
+#endif
 
 		EigenVector sol = decomp.solve(t * f);
 		Vector3Array u = GetStdVector(sol);
@@ -199,6 +210,8 @@ namespace FEM_SYSTEM
 		size_t numDofs = numNodes * 3;
 		mStiffnessMatrix.resize(numDofs, numDofs);
 		mStiffnessMatrix.setZero();
+		mBCStiffnessMatrix.resize(numDofs, mNumBCs * 3);
+		mBCStiffnessMatrix.setZero();
 		// go through all linear elements (tetrahedra)
 		for (size_t i = 0; i < (size_t)mTetMesh->GetNumElements(); i++)
 		{
@@ -211,7 +224,7 @@ namespace FEM_SYSTEM
 				for (size_t k = 0; k < GetNumLocalNodes(); k++)
 				{
 					size_t kGlobal = mReshuffleMap[mTetMesh->GetGlobalIndex(i, k)];
-					if (jGlobal < mNumBCs || kGlobal < mNumBCs)
+					if (jGlobal < mNumBCs)
 						continue;
 					int jOffset = (jGlobal - mNumBCs) * NUM_POS_COMPONENTS;
 					int kOffset = (kGlobal - mNumBCs) * NUM_POS_COMPONENTS;
@@ -221,7 +234,15 @@ namespace FEM_SYSTEM
 					{
 						for (size_t y = 0; y < NUM_POS_COMPONENTS; y++)
 						{
-							mStiffnessMatrix.coeffRef(jOffset + x, kOffset + y) += Klocal(j * NUM_POS_COMPONENTS + x, k * NUM_POS_COMPONENTS + y);
+							real val = Klocal(j * NUM_POS_COMPONENTS + x, k * NUM_POS_COMPONENTS + y);
+							if (kGlobal < mNumBCs)
+							{
+								mBCStiffnessMatrix.coeffRef(jOffset + x, kGlobal * NUM_POS_COMPONENTS + y) += val;
+							}
+							else
+							{
+								mStiffnessMatrix.coeffRef(jOffset + x, kOffset + y) += val;
+							}
 						}
 					}
 				}
@@ -300,8 +321,8 @@ namespace FEM_SYSTEM
 
 	void FemPhysicsLinearElasticity::ComputeDyadicMatrixBB2(uint32 i, uint32 j, Vector3R y[4], Matrix3R& L)
 	{
-		int* multiIndexI = mTetMesh->mIJKL + i * 4;
-		int* multiIndexJ = mTetMesh->mIJKL + j * 4;
+		int* multiIndexI = mTetMesh->GetIJKL(i);
+		int* multiIndexJ = mTetMesh->GetIJKL(j);
 		// compute every component of L
 		for (uint32 a = 0; a < NUM_POS_COMPONENTS; a++)
 		{
@@ -348,8 +369,8 @@ namespace FEM_SYSTEM
 				Matrix3R block = 0.4f * mElementVolumes[k] * (lambda * L + mu * !L + mu * L.Trace() * identity);
 #else
 				const auto& y = mBarycentricJacobians[k].y;
-				int* multiIndexI = mTetMesh->mIJKL + i * 4;
-				int* multiIndexJ = mTetMesh->mIJKL + j * 4;
+				int* multiIndexI = mTetMesh->GetIJKL(i);
+				int* multiIndexJ = mTetMesh->GetIJKL(j);
 				Matrix3R Kn(0), Ks(0);
 				for (uint32 c = 0; c < NUM_BARYCENTRIC_COMPONENTS; c++)
 				{				
