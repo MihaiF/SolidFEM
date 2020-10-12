@@ -167,7 +167,10 @@
     <ClInclude Include="Include\FemPhysicsLinear.h" />
     <ClInclude Include="Include\FemPhysicsLinearElasticity.h" />
     <ClInclude Include="Include\FemPhysicsLinearIncompressible.h" />
+    <ClInclude Include="Include\FemPhysicsMixed.h" />
     <ClInclude Include="Include\LinearSolver.h" />
+    <ClInclude Include="Include\MixedProblems.h" />
+    <ClInclude Include="Include\NewtonSolver.h" />
     <ClInclude Include="Include\StridedVector.h" />
     <ClInclude Include="Include\TetrahedralMesh.h" />
     <ClInclude Include="Math\Matrix3.h" />
@@ -178,6 +181,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="FEMLibrary.cpp" />
+    <ClCompile Include="Source\ElasticEnergy.cpp" />
     <ClCompile Include="Source\FemPhysicsBase.cpp" />
     <ClCompile Include="Source\FemPhysicsCorotationalElasticity.cpp" />
     <ClCompile Include="Source\FemPhysicsLinear.cpp">
@@ -187,8 +191,10 @@
     </ClCompile>
     <ClCompile Include="Source\FemPhysicsLinearElasticity.cpp" />
     <ClCompile Include="Source\FemPhysicsLinearIncompressible.cpp" />
+    <ClCompile Include="Source\FemPhysicsMixed.cpp" />
     <ClCompile Include="Source\LinearSolver.cpp" />
     <ClCompile Include="Source\PolarDecomposition.cpp" />
+    <ClCompile Include="Source\SaddlePointProblem.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

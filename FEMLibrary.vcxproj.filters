@@ -78,6 +78,15 @@
     <ClInclude Include="Include\FemCollisions.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Include\FemPhysicsMixed.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Include\MixedProblems.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Include\NewtonSolver.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\FemPhysicsLinear.cpp">
@@ -102,6 +111,15 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\FemPhysicsBase.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\FemPhysicsMixed.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\SaddlePointProblem.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\ElasticEnergy.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

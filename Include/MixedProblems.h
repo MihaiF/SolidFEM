@@ -1,7 +1,7 @@
 /*
 BSD 3-Clause License
 
-Copyright (c) 2019, Mihai Francu
+Copyright (c) 2020, Mihai Francu
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -30,10 +30,21 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-// Empty macros - these can be redefined by the user
+#pragma once
 
-#define MEASURE_TIME(text)
-#define MEASURE_TIME_P(text, var) var = 0;
-#define PROFILE_SCOPE(...)
-#define BEGIN_PROFILE(text)
-#define END_PROFILE()
+#include "FemPhysicsMixed.h"
+
+namespace FEM_SYSTEM
+{
+	class BaseProblem
+	{
+	public:
+		BaseProblem(FemPhysicsMixed& source) : mFPM(source) {}
+		real MeritResidual(const EigenVector& rhs) const { return rhs.norm(); }
+		bool CheckForInversion() const { return mFPM.CheckForInversion(); }
+
+	protected:
+		FemPhysicsMixed& mFPM;
+	};
+
+} //namespace FEM_SYSTEM

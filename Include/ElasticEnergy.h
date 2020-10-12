@@ -1,7 +1,7 @@
 /*
 BSD 3-Clause License
 
-Copyright (c) 2019, Mihai Francu
+Copyright (c) 2020, Mihai Francu
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -30,10 +30,26 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-// Empty macros - these can be redefined by the user
+#ifndef ELASTIC_ENERGY_H
+#define ELASTIC_ENERGY_H
 
-#define MEASURE_TIME(text)
-#define MEASURE_TIME_P(text, var) var = 0;
-#define PROFILE_SCOPE(...)
-#define BEGIN_PROFILE(text)
-#define END_PROFILE()
+#include <vector>
+#include "FemDataStructures.h"
+
+namespace FEM_SYSTEM
+{
+	class FemPhysicsBase;
+
+	class ElasticEnergy
+	{
+	public:
+		static Matrix3R ComputeElementStress(const FemPhysicsBase* femPhysics, uint32 e, int material = -1);
+		static void ComputeForces(const FemPhysicsBase* femPhysics, std::vector<Vector3R>& fout, int material = -1);
+		static void ComputeLocalForceDifferential(const FemPhysicsBase* femPhysics, uint32 e, const Vector3R dx[4], Vector3R df[4]);
+		static void ComputeLocalStiffnessMatrixFromDifferential(const FemPhysicsBase* femPhysics, uint32 e, EigenMatrix& Klocal);
+		
+		static void AssembleStiffnessMatrix(const FemPhysicsBase* femPhysics, EigenMatrix& stiffnessMatrix, EigenMatrix* bcStiffnessMatrix = nullptr);
+		static void AssembleStiffnessMatrix(const FemPhysicsBase* femPhysics, SparseMatrix& stiffnessMatrix, EigenMatrix* bcStiffnessMatrix = nullptr);
+	};
+}
+#endif // ELASTIC_ENERGY_H

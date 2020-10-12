@@ -1,7 +1,7 @@
 /*
 BSD 3-Clause License
 
-Copyright (c) 2019, Mihai Francu
+Copyright (c) 2020, Mihai Francu
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -30,10 +30,41 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-// Empty macros - these can be redefined by the user
+#pragma once
 
-#define MEASURE_TIME(text)
-#define MEASURE_TIME_P(text, var) var = 0;
-#define PROFILE_SCOPE(...)
-#define BEGIN_PROFILE(text)
-#define END_PROFILE()
+#include "MixedProblems.h"
+
+namespace FEM_SYSTEM
+{
+	class SaddlePointProblem : public BaseProblem
+	{
+	public:
+		enum SolverType
+		{
+			SPP_ST_DIRECT,
+			SPP_ST_ITERATIVE,
+			SPP_ST_SCHUR_COMPLIANCE,
+			SPP_ST_SCHUR_MASS,
+		};
+	public:
+		SaddlePointProblem(FemPhysicsMixed& source, int solverType) : BaseProblem(source), mSolverType(solverType)
+		{
+			if (mSolverType == SPP_ST_SCHUR_COMPLIANCE)
+			{
+				EigenMatrix C(mFPM.mVolComplianceMatrix);
+				mCinv = C.inverse().sparseView();
+			}
+		}
+		EigenVector ComputeRhs(const EigenVector& solution);
+		void ComputeSystemMatrix(const EigenVector& s, const EigenVector& y, EigenMatrix& K);
+		void ComputeSystemMatrix(const EigenVector& s, const EigenVector& y, SparseMatrix& K);
+		EigenVector SolveLinearSystem(EigenMatrix& K, const EigenVector& rhs, const EigenVector& s, const EigenVector& y);
+		EigenVector SolveLinearSystem(SparseMatrix& K, const EigenVector& rhs, const EigenVector& s, const EigenVector& y);
+		real MeritResidual(const EigenVector& rhs) const;
+
+	private:
+		SparseMatrix mCinv; // inverse compliance matrix
+		int mSolverType = SPP_ST_DIRECT;
+		EigenMatrix mKinv; // inverse stiffness matrix
+	};
+}

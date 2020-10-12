@@ -36,6 +36,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "pch.h"
 #include <iostream>
 #include "../Include/FemPhysicsLinearElasticity.h"
+#include "../Include/FemPhysicsMixed.h"
 
 using namespace FEM_SYSTEM;
 
@@ -60,6 +61,9 @@ int main()
 	tets[0].idx[2] = 2;
 	tets[0].idx[3] = 3;
 	femPhysics = new FemPhysicsLinearElasticity(tets, nodes, config);
+	delete femPhysics;
+
+	femPhysics = new FemPhysicsMixed(tets, nodes, config);
 	delete femPhysics;
 }
 

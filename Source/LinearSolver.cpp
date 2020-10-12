@@ -31,36 +31,57 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include "LinearSolver.h"
+#include <Engine/Utils.h>
 
-namespace FEM_SYSTEM
-{
+//namespace FEM_SYSTEM
+//{
 	void LinearSolver::Init(const EigenMatrix& matrix, LinearSolverType type, bool sparse)
 	{
 		mType = type;
 		mSparse = sparse;
 
+#if defined(_DEBUG) || !defined(USE_MKL)
+		// fall back on Eigen if MKL/Pardiso support absent
+		if (mType == LST_LDLT_PARDISO)
+			mType = LST_LDLT;
+		if (mType == LST_LU_PARDISO)
+			mType = LST_LU;
+#endif
+
 		// compute decomposition
 		if (mType == LST_LLT)
 		{
 			mLLT = matrix.llt();
+			if (mLLT.info() != Eigen::Success)
+				Printf("LLT failed\n");
 		}
 		else if (mType == LST_LU)
 		{
 			if (sparse)
 				mSparseLU.compute(matrix.sparseView());
 			else
+			{
 				mLU = matrix.lu();
+				Printf("det: %g\n", mLU.determinant());
+			}
 		}
 		else if (mType == LST_LDLT)
 		{
 			if (mSparse)
 				mSimplicialLDLT.compute(matrix.sparseView());
 			else
+			{
 				mLDLT = matrix.ldlt();
+				Printf("PD: %d\n", mLDLT.isPositive());
+			}
 		}
 		else if (mType == LST_FULL_LU)
 		{
 			mFullPivLU = matrix.fullPivLu();
+			Printf("det: %g\n", mFullPivLU.determinant());
+			Printf("rank: %d / %d\n", mFullPivLU.rank(), matrix.rows());
+			if (!mFullPivLU.isInvertible())
+				Printf("Matrix is singular\n");
 		}
 #if !defined(_DEBUG) && defined(USE_MKL)
 		else if (mType == LST_LDLT_PARDISO)
@@ -86,16 +107,31 @@ namespace FEM_SYSTEM
 		}
 	}
 
-	void LinearSolver::InitSparse(SparseMatrix& matrix, LinearSolverType type)
+	void LinearSolver::Init(SparseMatrix& matrix, LinearSolverType type)
 	{
 		mType = type;
 		mSparse = true;
 
+#if defined(_DEBUG) || !defined(USE_MKL)
+		// fall back on Eigen if MKL/Pardiso support absent
+		if (mType == LST_LDLT_PARDISO)
+			mType = LST_LDLT;
+		if (mType == LST_LU_PARDISO)
+			mType = LST_LU;
+#endif
+
 		// compute decomposition
-		if (mType == LST_LU)
+		if (mType == LST_LU || mType == LST_FULL_LU)
 		{
 			matrix.makeCompressed();
 			mSparseLU.compute(matrix);
+			Printf("det: %g\n", mSparseLU.determinant());
+		}
+		else if (mType == LST_LLT)
+		{
+			mSimplicialLLT.compute(matrix);
+			if (mSimplicialLLT.info() != Eigen::Success)
+				Printf("LLT failed\n");
 		}
 		else if (mType == LST_LDLT)
 		{
@@ -162,18 +198,28 @@ namespace FEM_SYSTEM
 #endif
 		else if (mType == LST_CG)
 		{
+			mCG.setTolerance(mTolerance);
+			if (mMaxIterations > 0)
+				mCG.setMaxIterations(mMaxIterations);
 			sol = mCG.solve(rhs);
+			mIterations = (int)mCG.iterations();
+			//Printf("CG statistics: iterations=%d / %d; error=%g / %g\n",
+			//	mCG.iterations(), mCG.maxIterations(), mCG.error(), mCG.tolerance());
 		}
 		else if (mType == LST_MINRES)
 		{
+			mMINRES.setTolerance(mTolerance);
 			sol = mMINRES.solve(rhs);
+			mIterations = (int)mMINRES.iterations();
 		}
 		else if (mType == LST_GMRES)
 		{
+			//mGMRES.setTolerance(mTolerance);
 			sol = mGMRES.solve(rhs);
+			mIterations = (int)mGMRES.iterations();
 		}
 
 		return sol;
 	}
 
-}
+//} //namespace

@@ -1,7 +1,7 @@
 /*
 BSD 3-Clause License
 
-Copyright (c) 2019, Mihai Francu
+Copyright (c) 2020, Mihai Francu
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -30,10 +30,54 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-// Empty macros - these can be redefined by the user
+#ifndef FEM_PHYSICS_MIXED
+#define FEM_PHYSICS_MIXED
 
-#define MEASURE_TIME(text)
-#define MEASURE_TIME_P(text, var) var = 0;
-#define PROFILE_SCOPE(...)
-#define BEGIN_PROFILE(text)
-#define END_PROFILE()
+#include "FemPhysicsLinearIncompressible.h"
+
+namespace FEM_SYSTEM
+{
+	class PrimalProblem;
+
+	class FemPhysicsMixed : public FemPhysicsLinearIncompressible
+	{
+	public:
+		FemPhysicsMixed(std::vector<Tet>& tetrahedra,
+			std::vector<Node>& allNodes, const FemConfig& config);
+
+		void Step(real dt) override;
+
+	private:
+		void SolveSaddlePoint();
+		void SolveSaddlePointLS();
+
+		real GetCurrentVolumeErrors(EigenVector& errors, bool verbose = false);
+		void AssembleGeometricStiffnessMatrix(const EigenVector& p, SparseMatrix& Kgeom) const;
+		void AssembleGeometricStiffnessMatrixFD(const EigenVector& p, EigenMatrix& Kgeom);
+		void ComputeGradients(std::vector<Vector3R>& r, const EigenVector& dx, int material = -1);
+
+		template<class MATRIX>
+		void ComputeStiffnessMatrix(MATRIX& K, bool update = true);
+		EigenVector ComputeStdRhs(int material = -1);
+		EigenVector ComputePosRhs();
+
+		void AssembleJacobianMatrixFD(EigenMatrix& J);
+
+		uint32 GetNumContacts() const
+		{
+			return 0;
+		}
+
+	private:
+		real mTimeStep;
+		EigenVector mContactMultipliers, mContactDepth;
+		bool mCondenseContact = false;
+		real mStepLength;
+		EigenVector mVolStretches;
+
+		friend class SaddlePointProblem;
+	};
+
+} // namespace FEM_SYSTEM
+
+#endif // FEM_PHYSICS_MIXED

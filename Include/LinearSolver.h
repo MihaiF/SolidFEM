@@ -37,8 +37,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma warning( disable : 4305)
 
-namespace FEM_SYSTEM
-{
+//namespace FEM_SYSTEM
+//{
 	enum LinearSolverType
 	{
 		LST_FULL_LU,
@@ -56,12 +56,19 @@ namespace FEM_SYSTEM
 	{
 	public:
 		void Init(const EigenMatrix& matrix, LinearSolverType type, bool sparse = false);
-		void InitSparse(SparseMatrix& matrix, LinearSolverType type);
+		void Init(SparseMatrix& matrix, LinearSolverType type);
 		EigenVector Solve(const EigenVector& rhs);
+
+		void SetTolerance(real tol) { mTolerance = tol; }
+		void SetMaxIterations(int maxIter) { mMaxIterations = maxIter; }
+		int GetIterations() const { return mIterations; }
 
 	private:
 		LinearSolverType mType;
 		bool mSparse = false;
+		real mTolerance = 1e-4; // for iterative solvers
+		int mIterations = -1;
+		int mMaxIterations = -1;
 
 		// matrix decompositions
 		Eigen::FullPivLU<EigenMatrix> mFullPivLU;
@@ -70,19 +77,20 @@ namespace FEM_SYSTEM
 		Eigen::LDLT<EigenMatrix> mLDLT;
 
 		// sparse matrix decompositions
+		Eigen::SimplicialLLT<SparseMatrix> mSimplicialLLT;
 		Eigen::SimplicialLDLT<SparseMatrix> mSimplicialLDLT;
 		Eigen::SparseLU<SparseMatrix> mSparseLU;
 #if !defined(_DEBUG) && defined(USE_MKL)
-		Eigen::PardisoLDLT<SparseMatrix> mPardisoLU;
-		Eigen::PardisoLU<SparseMatrix> mPardisoLDLT;
+		Eigen::PardisoLDLT<SparseMatrix> mPardisoLDLT;
+		Eigen::PardisoLU<SparseMatrix> mPardisoLU;
 #endif
 
 		// iterative solvers
-		Eigen::ConjugateGradient<SparseMatrix, Eigen::Lower | Eigen::Upper, Eigen::IncompleteCholesky<real>> mCG;
+		Eigen::ConjugateGradient<SparseMatrix, Eigen::Lower | Eigen::Upper, Eigen::IdentityPreconditioner> mCG;
 		Eigen::GMRES<SparseMatrix, Eigen::IncompleteLUT<real>> mGMRES;
 		Eigen::MINRES<SparseMatrix, Eigen::Lower | Eigen::Upper, Eigen::IncompleteCholesky<real>> mMINRES;
 	};
 
-} // namespace FEM_SYSTEM
+//} // namespace FEM_SYSTEM
 
 #endif // LINEAR_SOLVER_H
