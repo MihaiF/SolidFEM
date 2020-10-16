@@ -1,11 +1,13 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.28307.852
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.30611.23
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "FEMLibrary", "FEMLibrary.vcxproj", "{A404BCDF-09E9-4026-8D13-43B364FA6D2F}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SolidFEM", "FEMLibrary.vcxproj", "{A404BCDF-09E9-4026-8D13-43B364FA6D2F}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Tester", "Tester\Tester.vcxproj", "{C67B8C62-10D2-41DF-883C-17B2A5052540}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "SolidFEMapp", "SolidFEMapp\SolidFEMapp.vcxproj", "{E2B96FEB-D430-4F81-9283-F3730500B443}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -31,6 +33,14 @@ Global
 		{C67B8C62-10D2-41DF-883C-17B2A5052540}.Release|x64.Build.0 = Release|x64
 		{C67B8C62-10D2-41DF-883C-17B2A5052540}.Release|x86.ActiveCfg = Release|Win32
 		{C67B8C62-10D2-41DF-883C-17B2A5052540}.Release|x86.Build.0 = Release|Win32
+		{E2B96FEB-D430-4F81-9283-F3730500B443}.Debug|x64.ActiveCfg = Debug|x64
+		{E2B96FEB-D430-4F81-9283-F3730500B443}.Debug|x64.Build.0 = Debug|x64
+		{E2B96FEB-D430-4F81-9283-F3730500B443}.Debug|x86.ActiveCfg = Debug|Win32
+		{E2B96FEB-D430-4F81-9283-F3730500B443}.Debug|x86.Build.0 = Debug|Win32
+		{E2B96FEB-D430-4F81-9283-F3730500B443}.Release|x64.ActiveCfg = Release|x64
+		{E2B96FEB-D430-4F81-9283-F3730500B443}.Release|x64.Build.0 = Release|x64
+		{E2B96FEB-D430-4F81-9283-F3730500B443}.Release|x86.ActiveCfg = Release|Win32
+		{E2B96FEB-D430-4F81-9283-F3730500B443}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

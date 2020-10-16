@@ -46,6 +46,9 @@ inline void Printf(const char* text, ...) { }
 #include <stdarg.h>
 #include <stdio.h>
 #include "Platform.h"
+#if defined(LINUX)
+#	define Printf printf
+#else
 extern FILE* out;
 inline void Printf(const char* text, ...)
 {
@@ -54,14 +57,16 @@ inline void Printf(const char* text, ...)
 	static char str[strSize];
 
 	va_start(arg_list, text);
-#ifdef ANDROID_NDK
-	vsprintf(str, text, arg_list);
-#else
+#ifdef WIN32
 	vsprintf_s(str, strSize, text, arg_list);
+#else
+	vsprintf(str, text, arg_list);
 #endif
 	va_end(arg_list);
 
-#if defined(_WIN32)
+#if defined(_CONSOLE)
+	printf("%s", str);
+#elif defined(_WIN32)
 	OutputDebugStringA(str);
 #endif
 	if (out)
@@ -71,6 +76,7 @@ inline void Printf(const char* text, ...)
 #endif
 }
 #endif
+#endif // !LINUX
 
 #if defined(_DEBUG) && !defined(ANDROID_NDK)
 //#	include <assert.h>
