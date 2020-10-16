@@ -43,6 +43,7 @@ namespace FEM_SYSTEM
 	class ElasticEnergy
 	{
 	public:
+		static real ComputeEnergy(const FemPhysicsBase* femPhysics, int material = -1);
 		static Matrix3R ComputeElementStress(const FemPhysicsBase* femPhysics, uint32 e, int material = -1);
 		static void ComputeForces(const FemPhysicsBase* femPhysics, std::vector<Vector3R>& fout, int material = -1);
 		static void ComputeLocalForceDifferential(const FemPhysicsBase* femPhysics, uint32 e, const Vector3R dx[4], Vector3R df[4]);

@@ -167,12 +167,15 @@
     <ClInclude Include="Include\FemPhysicsLinear.h" />
     <ClInclude Include="Include\FemPhysicsLinearElasticity.h" />
     <ClInclude Include="Include\FemPhysicsLinearIncompressible.h" />
+    <ClInclude Include="Include\FemPhysicsMatrixFree.h" />
     <ClInclude Include="Include\FemPhysicsMixed.h" />
     <ClInclude Include="Include\LinearSolver.h" />
     <ClInclude Include="Include\MixedProblems.h" />
     <ClInclude Include="Include\NewtonSolver.h" />
+    <ClInclude Include="Include\NonlinearCG.h" />
     <ClInclude Include="Include\StridedVector.h" />
     <ClInclude Include="Include\TetrahedralMesh.h" />
+    <ClInclude Include="Math\IterativeSolvers.h" />
     <ClInclude Include="Math\Matrix3.h" />
     <ClInclude Include="Math\Vector3.h" />
     <ClInclude Include="Source\MeshFactory.h" />
@@ -191,6 +194,7 @@
     </ClCompile>
     <ClCompile Include="Source\FemPhysicsLinearElasticity.cpp" />
     <ClCompile Include="Source\FemPhysicsLinearIncompressible.cpp" />
+    <ClCompile Include="Source\FemPhysicsMatrixFree.cpp" />
     <ClCompile Include="Source\FemPhysicsMixed.cpp" />
     <ClCompile Include="Source\LinearSolver.cpp" />
     <ClCompile Include="Source\PolarDecomposition.cpp" />

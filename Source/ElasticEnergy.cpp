@@ -34,19 +34,92 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "FemPhysicsBase.h"
 #include "PolarDecomposition.h"
 #include <Engine/Profiler.h>
+#include <Math/IterativeSolvers.h>
 
 namespace FEM_SYSTEM
 {
-	template <typename TE, typename TR>
-	TR InnerProduct(const std::vector<TE>& a, const std::vector<TE>& b)
+	real ElasticEnergy::ComputeEnergy(const FemPhysicsBase* femPhysics, int material)
 	{
-		ASSERT(a.size() == b.size());
-		TR sum = 0;
-		for (size_t i = 0; i < a.size(); i++)
-			sum += a[i] * b[i];
-		return sum;
-	}
+		real totalEnergy = 0;
+		if (material == -1)
+			material = femPhysics->GetMaterial();
 
+		// helper constants
+		const Matrix3R id;
+		const real mu = femPhysics->GetShearModulus();
+		const real lambda = femPhysics->GetLameFirstParam();
+
+		// go through all elements and add up nodal forces
+		// TODO: OpenMP acceleration
+		for (int e = 0; e < (int)femPhysics->GetNumElements(); e++)
+		{
+			// compute nodal forces for this element only
+			Matrix3R F;
+			femPhysics->ComputeDeformationGradient(e, F);
+
+			Matrix3R R, U;
+			if (material == MMT_COROTATIONAL)
+			{
+				ComputePolarDecomposition(F, R, U);
+				F = U; // this seems to be broken for the torus!
+			}
+
+			// compute strain and strain rate as tensors
+			Matrix3R strain;
+			if (material == MMT_LINEAR ||
+				material == MMT_COROTATIONAL ||
+				material == MMT_DISTORTIONAL_LINEAR)
+			{
+				strain = 0.5f * (F + !F) - id; // Cauchy strain
+			}
+			else
+			{
+				strain = 0.5f * (!F * F - id);	// Green strain	
+			}
+
+			real energy = 0;
+			if (material == MMT_LINEAR ||
+				material == MMT_COROTATIONAL ||
+				material == MMT_STVK)
+			{
+				real trace = strain.Trace();
+				energy = mu * Matrix3R::DoubleContraction(strain, strain) + 0.5f * lambda * trace * trace;
+			}
+			else if (material == MMT_NEO_HOOKEAN)
+			{
+				real J = F.Determinant();
+				Matrix3R C = !F * F;
+				real I1 = C.Trace();
+				real logJ = log(J);
+				energy = 0.5f * mu * (I1 - 3) - mu * logJ + 0.5f * lambda * logJ * logJ;
+			}
+			else if (material == MMT_NEO_HOOKEAN_OGDEN)
+			{
+				real J = F.Determinant();
+				Matrix3R C = !F * F;
+				real I1 = C.Trace();
+				real logJ = log(J);
+				energy = 0.5f * mu * (I1 - 3) - mu * logJ + 0.5f * lambda * (J - 1) * (J - 1);
+			}
+			else if (material == MMT_DISTORTIONAL_MOONEY)
+			{
+				Matrix3R C = !F * F;
+				real I1 = C.Trace();
+				energy = 0.5f * mu * (I1 - 3);
+			}
+			else if (material == MMT_DISTORTIONAL_OGDEN)
+			{
+				real J = F.Determinant();
+				Matrix3R C = !F * F;
+				real I1 = C.Trace();
+				real logJ = log(J);
+				energy = 0.5f * mu * (I1 - 3) - mu * logJ;
+			}
+
+			totalEnergy += femPhysics->GetElementInitialVolume(e) * energy;
+		}
+		return totalEnergy;
+	}
 	Matrix3R ElasticEnergy::ComputeElementStress(const FemPhysicsBase* femPhysics, uint32 e, int material)
 	{
 		Matrix3R id;

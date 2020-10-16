@@ -37,6 +37,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <iostream>
 #include "../Include/FemPhysicsLinearElasticity.h"
 #include "../Include/FemPhysicsMixed.h"
+#include "../Include/FemPhysicsMatrixFree.h"
 
 using namespace FEM_SYSTEM;
 
@@ -64,6 +65,9 @@ int main()
 	delete femPhysics;
 
 	femPhysics = new FemPhysicsMixed(tets, nodes, config);
+	delete femPhysics;
+
+	femPhysics = new FemPhysicsMatrixFree(tets, nodes, config);
 	delete femPhysics;
 }
 

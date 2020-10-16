@@ -87,6 +87,15 @@
     <ClInclude Include="Include\NewtonSolver.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Include\FemPhysicsMatrixFree.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Math\IterativeSolvers.h">
+      <Filter>Math</Filter>
+    </ClInclude>
+    <ClInclude Include="Include\NonlinearCG.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\FemPhysicsLinear.cpp">
@@ -120,6 +129,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\ElasticEnergy.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\FemPhysicsMatrixFree.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
