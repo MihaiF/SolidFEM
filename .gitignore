@@ -6,3 +6,6 @@
 /x64
 /Tester/x64/Debug
 /Tester/x64/Release
+/PySolidFEM/x64/Release
+/SolidFEMapp/x64/Release
+/SolidFEMapp/SolidFEMapp.vcxproj.user
