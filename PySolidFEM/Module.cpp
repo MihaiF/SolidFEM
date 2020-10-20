@@ -53,6 +53,9 @@ public:
 	void SaveToVTK(py::str path);
 
 private:
+	FemConfig ParseConfig(py::dict config);
+
+private:
 	std::unique_ptr< FemPhysicsMatrixFree> mPhys;
 };
 
@@ -109,28 +112,8 @@ PyNonlinearFEM::PyNonlinearFEM(py::array_t<int> tets, py::array_t<double> nodes,
 		nNodes[idx].invMass = 0;
 	}
 
-	// prepare the FEM config
-	FemConfig nConfig; // default config
-	if (config.contains("young"))
-	{
-		nConfig.mYoungsModulus = py::cast<real>(config["young"]);
-	}
-	if (config.contains("poisson"))
-	{
-		nConfig.mPoissonRatio = py::cast<real>(config["poisson"]);
-	}
-	if (config.contains("simtype"))
-	{ 
-		nConfig.mSimType = (SimulationType)py::cast<int>(config["simtype"]);
-	}
-	nConfig.mMaterial = (MaterialModelType)MMT_NEO_HOOKEAN;
-	FemPhysicsMatrixFree::Config nonlinConfig;
-	nonlinConfig.mSolver = NST_NEWTON_LS;
-	nonlinConfig.mOptimizer = false;
-	nConfig.mCustomConfig = &nonlinConfig;
-
 	// create the FEM object
-	mPhys.reset(new FemPhysicsMatrixFree(nTets, nNodes, nConfig));
+	mPhys.reset(new FemPhysicsMatrixFree(nTets, nNodes, ParseConfig(config)));
 }
 
 PyNonlinearFEM::PyNonlinearFEM(py::str path)
@@ -189,6 +172,29 @@ void PyNonlinearFEM::SaveToVTK(py::str path)
 	vtkStream.open(vtkPath, std::fstream::out);
 	IO::ExportToVTKHeatMap(vtkStream, mPhys.get());
 	vtkStream.close();
+}
+
+FEM_SYSTEM::FemConfig PyNonlinearFEM::ParseConfig(py::dict config)
+{
+	FemConfig nConfig; // default config
+	if (config.contains("young"))
+	{
+		nConfig.mYoungsModulus = py::cast<real>(config["young"]);
+	}
+	if (config.contains("poisson"))
+	{
+		nConfig.mPoissonRatio = py::cast<real>(config["poisson"]);
+	}
+	if (config.contains("simtype"))
+	{
+		nConfig.mSimType = (SimulationType)py::cast<int>(config["simtype"]);
+	}
+	nConfig.mMaterial = (MaterialModelType)MMT_NEO_HOOKEAN;
+	FemPhysicsMatrixFree::Config nonlinConfig;
+	nonlinConfig.mSolver = NST_NEWTON_LS;
+	nonlinConfig.mOptimizer = false;
+	nConfig.mCustomConfig = &nonlinConfig;
+	return nConfig;
 }
 
 PYBIND11_MODULE(pysolidfem, m) {

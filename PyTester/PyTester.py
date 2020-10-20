@@ -48,8 +48,15 @@ ax.scatter(x, z, y)
 plt.savefig('plot.png')
 
 # create the simulator from file
-fem = psf.NonlinearFEM('hammerbot.xml')
-fem.step()
-nodes = fem.get_nodes()
-fem.save_to_vtk("hammerbot.vtk")
+#fem = psf.NonlinearFEM('hammerbot.xml')
+#fem.step()
+#nodes = fem.get_nodes()
+#fem.save_to_vtk("hammerbot.vtk")
+
+fem = psf.NonlinearFEM('hammerbot_explicit.xml')
+fem.save_to_vtk("hammerbot0.vtk")
+
+for i in range(0, 10):
+    fem.step(dt)
+    fem.save_to_vtk("hammerbot{0}.vtk".format(i + 1))
 

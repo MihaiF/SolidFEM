@@ -712,6 +712,10 @@ namespace FEM_SYSTEM
 			{
 				femConfig.mSimType = ST_QUASI_STATIC;
 			}
+			else if (strcmp(type, "explicit") == 0)
+			{
+				femConfig.mSimType = ST_EXPLICIT;
+			}
 
 			const char* method = xSim->Attribute("method");
 			if (strcmp(method, "nonlinear") == 0)
@@ -727,7 +731,10 @@ namespace FEM_SYSTEM
 			if (str)
 			{
 				int n = atoi(str);
-				femConfig.mForceApplicationStep = 1.0 / n;
+				if (femConfig.mSimType < ST_EXPLICIT)
+					femConfig.mForceApplicationStep = 1.0 / n;
+				else
+					femConfig.mNumSubsteps = n;
 			}
 
 			str = xSim->Attribute("gravity");
