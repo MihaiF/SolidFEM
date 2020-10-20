@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 
 from mpl_toolkits.mplot3d import Axes3D
 
+from Simulator import Simulator
+
 # print something
 print('Hello!')
 
@@ -12,7 +14,6 @@ print('Hello!')
 # 1 QUASI_STATIC,
 # 2 EXPLICIT,
 # 3 IMPLICIT,
-
 
 # prepaper the FEM tetrahedron
 config = {
@@ -30,11 +31,12 @@ fixed_nodes = np.array([0, 1, 2]);
 fem = psf.NonlinearFEM(tets, nodes, fixed_nodes, config)
 
 dt = 0.016
+numSteps = 2
 fem.save_to_vtk('tetrahedron0.vtk')
-for i in range(0, 10):
+for i in range(0, numSteps):
     fem.step(dt)
-    nodes = fem.get_nodes()
-    print(nodes)
+    nodes1 = fem.get_nodes()
+    print(nodes1)
     fem.save_to_vtk('tetrahedron{0}.vtk'.format(i+1))
 
 # plot the mesh   
@@ -47,16 +49,22 @@ z = pos[2::3]
 ax.scatter(x, z, y)
 plt.savefig('plot.png')
 
+# Python simulator
+particle_mass = np.array([0, 0, 0, 1], dtype=np.int)
+sim = Simulator(nodes, tets, particle_mass)
+nodes2 = sim.step()
+nodes2 = sim.step()
+print(nodes2)
+
 # create the simulator from file
 #fem = psf.NonlinearFEM('hammerbot.xml')
 #fem.step()
 #nodes = fem.get_nodes()
 #fem.save_to_vtk("hammerbot.vtk")
 
-fem = psf.NonlinearFEM('hammerbot_explicit.xml')
-fem.save_to_vtk("hammerbot0.vtk")
-
-for i in range(0, 10):
-    fem.step(dt)
-    fem.save_to_vtk("hammerbot{0}.vtk".format(i + 1))
-
+# explicit integration
+#fem = psf.NonlinearFEM('hammerbot_explicit.xml')
+#fem.save_to_vtk("hammerbot0.vtk")
+#for i in range(0, 10):
+#    fem.step(dt)
+#    fem.save_to_vtk("hammerbot{0}.vtk".format(i + 1))
