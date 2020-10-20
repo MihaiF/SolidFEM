@@ -52,7 +52,7 @@ namespace FEM_SYSTEM
 			struct Config
 			{
 				NodalForcesType mNodalForcesComputation = NFT_DIRECT; // not used
-				NonlinearSolverType mSolver = NST_NEWTON_CG;
+				NonlinearSolverType mSolver = NST_NEWTON;
 				float mDescentRate = 1e-5f;
 				bool mOptimizer = false;
 			};

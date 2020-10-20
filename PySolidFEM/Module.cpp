@@ -11,7 +11,7 @@ using namespace FEM_SYSTEM;
 class PyNonlinearFEM
 {
 public:
-	PyNonlinearFEM(py::array_t<int> tets, py::array_t<double> nodes)
+	PyNonlinearFEM(py::array_t<int> tets, py::array_t<double> nodes, py::array_t<int> fixed_nodes)
 	{
 		// read the tets
 		py::buffer_info buf = tets.request();
@@ -55,6 +55,15 @@ public:
 			nNodes[i].pos0 = pos;
 		}
 
+		// set the fixed nodes
+		auto bufFixed = fixed_nodes.request();
+		int* ptrFixed = (int*)bufFixed.ptr;
+		for (int i = 0; i < fixed_nodes.size(); i++)
+		{
+			int idx = ptrFixed[i];
+			nNodes[idx].invMass = 0;
+		}
+
 		// create the FEM object
 		FemConfig config; // default config
 		mPhys.reset(new FemPhysicsMatrixFree(nTets, nNodes, config));
@@ -65,12 +74,29 @@ public:
 		mPhys->Step(0.016);
 	}
 
+	py::array_t<double> GetNodes() const
+	{
+		// allocate the buffer
+		int numNodes = mPhys->GetNumNodes();
+		py::array_t<double> result = py::array_t<double>(numNodes * 3);
+		py::buffer_info buf = result.request();
+		double* ptr = (double*)buf.ptr;
+		for (int i = 0; i < numNodes; i++)
+		{
+			for (int j = 0; j < 3; j++)
+				ptr[i * 3 + j] = mPhys->GetDeformedPosition(i)[j];
+		}
+		result.resize({ numNodes, 3 });
+		return result;
+	}
+
 private:
 	std::unique_ptr< FemPhysicsMatrixFree> mPhys;
 };
 
 PYBIND11_MODULE(pysolidfem, m) {	
 	py::class_<PyNonlinearFEM>(m, "NonlinearFEM")
-		.def(py::init<py::array_t<int>, py::array_t<double>>())
-		.def("step", &PyNonlinearFEM::Step);
+		.def(py::init<py::array_t<int>, py::array_t<double>, py::array_t<int>>())
+		.def("step", &PyNonlinearFEM::Step)
+		.def("get_nodes", &PyNonlinearFEM::GetNodes);
 }

@@ -9,3 +9,4 @@
 /PySolidFEM/x64/Release
 /SolidFEMapp/x64/Release
 /SolidFEMapp/SolidFEMapp.vcxproj.user
+*.png

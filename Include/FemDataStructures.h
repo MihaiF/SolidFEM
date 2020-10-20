@@ -131,7 +131,7 @@ namespace FEM_SYSTEM
 	struct FemConfig
 	{
 		real mYoungsModulus = 66000;
-		real mPoissonRatio = 0.3f;
+		real mPoissonRatio = 0.4f;
 		real mDampingYoungsModulus = 0;
 		real mDampingPoissonRatio = 0;
 		MethodType mType = MT_LINEAR_ELASTICITY;

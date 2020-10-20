@@ -64,11 +64,10 @@ inline void Printf(const char* text, ...)
 #endif
 	va_end(arg_list);
 
-#if defined(_CONSOLE)
-	printf("%s", str);
-#elif defined(_WIN32)
+#if defined(_WIN32)
 	OutputDebugStringA(str);
 #endif
+	std::cout << str;
 	if (out)
 		fprintf(out, "%s", str);
 #ifdef ANDROID_NDK
