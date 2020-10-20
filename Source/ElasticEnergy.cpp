@@ -251,7 +251,7 @@ namespace FEM_SYSTEM
 	void ElasticEnergy::ComputeForces(const FemPhysicsBase* femPhysics, std::vector<Vector3R>& fout, int material)
 	{
 		// go through all elements and add up nodal forces
-		// TODO: OpenMP acceleration
+		#pragma omp parallel for
 		for (int e = 0; e < (int)femPhysics->GetNumElements(); e++)
 		{
 			auto piolae = ComputeElementStress(femPhysics, e, material);

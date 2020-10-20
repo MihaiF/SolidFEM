@@ -41,19 +41,22 @@ namespace py = pybind11;
 
 using namespace FEM_SYSTEM;
 
+const real DT = 0.016;
+
 class PyNonlinearFEM
 {
 public:
-	PyNonlinearFEM(py::array_t<int> tets, py::array_t<double> nodes, py::array_t<int> fixed_nodes);
+	PyNonlinearFEM(py::array_t<int> tets, py::array_t<double> nodes, py::array_t<int> fixed_nodes, py::dict config);
 	PyNonlinearFEM(py::str path);
-	void Step() { mPhys->Step(0.016); }
+	void Step(real dt = DT) { mPhys->Step(dt); }
 	py::array_t<double> GetNodes() const;
+	void SaveToVTK(py::str path);
 
 private:
 	std::unique_ptr< FemPhysicsMatrixFree> mPhys;
 };
 
-PyNonlinearFEM::PyNonlinearFEM(py::array_t<int> tets, py::array_t<double> nodes, py::array_t<int> fixed_nodes)
+PyNonlinearFEM::PyNonlinearFEM(py::array_t<int> tets, py::array_t<double> nodes, py::array_t<int> fixed_nodes, py::dict config)
 {
 	// read the tets
 	py::buffer_info buf = tets.request();
@@ -106,9 +109,28 @@ PyNonlinearFEM::PyNonlinearFEM(py::array_t<int> tets, py::array_t<double> nodes,
 		nNodes[idx].invMass = 0;
 	}
 
+	// prepare the FEM config
+	FemConfig nConfig; // default config
+	if (config.contains("young"))
+	{
+		nConfig.mYoungsModulus = py::cast<real>(config["young"]);
+	}
+	if (config.contains("poisson"))
+	{
+		nConfig.mPoissonRatio = py::cast<real>(config["poisson"]);
+	}
+	if (config.contains("simtype"))
+	{ 
+		nConfig.mSimType = (SimulationType)py::cast<int>(config["simtype"]);
+	}
+	nConfig.mMaterial = (MaterialModelType)MMT_NEO_HOOKEAN;
+	FemPhysicsMatrixFree::Config nonlinConfig;
+	nonlinConfig.mSolver = NST_NEWTON_LS;
+	nonlinConfig.mOptimizer = false;
+	nConfig.mCustomConfig = &nonlinConfig;
+
 	// create the FEM object
-	FemConfig config; // default config
-	mPhys.reset(new FemPhysicsMatrixFree(nTets, nNodes, config));
+	mPhys.reset(new FemPhysicsMatrixFree(nTets, nNodes, nConfig));
 }
 
 PyNonlinearFEM::PyNonlinearFEM(py::str path)
@@ -159,10 +181,21 @@ py::array_t<double> PyNonlinearFEM::GetNodes() const
 	return result;
 }
 
+void PyNonlinearFEM::SaveToVTK(py::str path)
+{
+	Printf("Saving VTK file\n");
+	std::fstream vtkStream;
+	std::string vtkPath(path);
+	vtkStream.open(vtkPath, std::fstream::out);
+	IO::ExportToVTKHeatMap(vtkStream, mPhys.get());
+	vtkStream.close();
+}
+
 PYBIND11_MODULE(pysolidfem, m) {
 	py::class_<PyNonlinearFEM>(m, "NonlinearFEM")
-		.def(py::init<py::array_t<int>, py::array_t<double>, py::array_t<int>>())
+		.def(py::init<py::array_t<int>, py::array_t<double>, py::array_t<int>, py::dict>())
 		.def(py::init<py::str>())
-		.def("step", &PyNonlinearFEM::Step)
-		.def("get_nodes", &PyNonlinearFEM::GetNodes);
+		.def("step", &PyNonlinearFEM::Step, py::arg("dt") = DT)
+		.def("get_nodes", &PyNonlinearFEM::GetNodes)
+		.def("save_to_vtk", &PyNonlinearFEM::SaveToVTK);
 }
