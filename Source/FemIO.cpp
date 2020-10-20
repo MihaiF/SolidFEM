@@ -591,192 +591,195 @@ namespace FEM_SYSTEM
 		surfTris.clear();
 
 		tinyxml2::XMLDocument doc;
-		if (doc.LoadFile(path) == tinyxml2::XML_SUCCESS)
+		if (doc.LoadFile(path) != tinyxml2::XML_SUCCESS)
+			return false;
+
+		tinyxml2::XMLElement* root = doc.FirstChildElement("solidfem");
+		if (!root)
+			return false;
+
+		tinyxml2::XMLElement* xModel = root->FirstChildElement("model");
+		if (xModel)
 		{
-			tinyxml2::XMLElement* root = doc.FirstChildElement("solidfem");
-			if (!root)
+			// load the model
+			const char* modelName = xModel->Attribute("path");
+			if (!modelName)
 				return false;
+			std::string modelPath = dir + modelName;
+			real scale = 1;
+			const char* xScale = xModel->Attribute("scale");
+			if (xScale)
+				scale = atof(xScale);
 
-			tinyxml2::XMLElement* xModel = root->FirstChildElement("model");
-			if (xModel)
+			const char* type = xModel->Attribute("type");
+			if (strcmp(type, "vol") == 0)
 			{
-				// load the model
-				const char* modelName = xModel->Attribute("path");
-				if (!modelName)
+				if (!LoadFromVolFile(modelPath.c_str(), scale, nodes, tets))
 					return false;
-				std::string modelPath = dir + modelName;
-				real scale = 1;
-				const char* xScale = xModel->Attribute("scale");
-				if (xScale)
-					scale = atof(xScale);
+			}
+			else if (strcmp(type, "tet1") == 0)
+			{
+				if (!LoadFromTet1File(modelPath.c_str(), scale, Vector3R(), nodes, tets))
+					return false;
+			}
+			else if (strcmp(type, "feb") == 0)
+			{
+				std::set<uint32> innerSurface;
+				return LoadFromFebFile(modelPath.c_str(), nodes, tets, fixedNodes, surfTris, innerSurface, scale, &femConfig);
+				// TODO: bcFlag and bcIndices
+			}
 
-				const char* type = xModel->Attribute("type");
-				if (strcmp(type, "vol") == 0)
-				{
-					if (!LoadFromVolFile(modelPath.c_str(), scale, nodes, tets))
-						return false;
-				}
-				else if (strcmp(type, "tet1") == 0)
-				{
-					if (!LoadFromTet1File(modelPath.c_str(), scale, Vector3R(), nodes, tets))
-						return false;
-				}
-				else if (strcmp(type, "feb") == 0)
-				{
-					std::set<uint32> innerSurface;
-					return LoadFromFebFile(modelPath.c_str(), nodes, tets, fixedNodes, surfTris, innerSurface, scale, &femConfig);
-					// TODO: bcFlag and bcIndices
-				}
-
-				int swapCoords = SCT_SWAP_NONE;
-				const char* swap = xModel->Attribute("swap");
+			int swapCoords = SCT_SWAP_NONE;
+			const char* swap = xModel->Attribute("swap");
+			if (swap)
+			{
 				if (strcmp(swap, "xy") == 0)
 					swapCoords = SCT_SWAP_X_AND_Y;
 				else if (strcmp(swap, "xz") == 0)
 					swapCoords = SCT_SWAP_X_AND_Z;
 				else if (strcmp(swap, "yz") == 0)
 					swapCoords = SCT_SWAP_Y_AND_Z;
-
-				// post-process nodes
-				FEM_SYSTEM::Vector3R initialVel(0.f, 0, 0.f);
-				for (uint32 i = 0; i < nodes.size(); i++)
-				{
-					FEM_SYSTEM::Node& node = nodes[i];
-					if (swapCoords == SCT_SWAP_X_AND_Y)
-						std::swap(node.pos.x, node.pos.y);
-					else if (swapCoords == SCT_SWAP_X_AND_Z)
-						std::swap(node.pos.x, node.pos.z);
-					else if (swapCoords == SCT_SWAP_Y_AND_Z)
-						std::swap(node.pos.y, node.pos.z);
-				}
-
-				// load the Dirichlet BCs
-				tinyxml2::XMLElement* xDirichlet = xModel->FirstChildElement("dirichlet");
-				if (xDirichlet)
-				{
-					const char* text = xDirichlet->GetText();
-					std::string str(text);
-					while (!str.empty())
-					{
-						size_t next;
-						int idx = std::stoi(str, &next);
-						fixedNodes.push_back(idx);
-						if (next >= str.size())
-							break;
-						if (str[next] == ',')
-							next++;
-						str = str.substr(next);
-					}
-
-					Printf("%d pinned nodes\n", fixedNodes.size());
-				}
 			}
 
-			tinyxml2::XMLElement* xMaterial = root->FirstChildElement("material");
-			if (xMaterial)
+			// post-process nodes
+			FEM_SYSTEM::Vector3R initialVel(0.f, 0, 0.f);
+			for (uint32 i = 0; i < nodes.size(); i++)
 			{
-				const char* name = xMaterial->Attribute("name");
-				if (strcmp(name, "neo-hookean") == 0)
-				{
-					femConfig.mMaterial = (MaterialModelType)MMT_NEO_HOOKEAN;
-				}
-
-				const char* str = xMaterial->Attribute("young");
-				if (str)
-				{
-					femConfig.mYoungsModulus = atof(str);
-				}
-
-				str = xMaterial->Attribute("poisson");
-				if (str)
-				{
-					femConfig.mPoissonRatio = atof(str);
-				}
-
-				str = xMaterial->Attribute("density");
-				if (str)
-				{
-					femConfig.mDensity = atof(str);
-				}
+				FEM_SYSTEM::Node& node = nodes[i];
+				if (swapCoords == SCT_SWAP_X_AND_Y)
+					std::swap(node.pos.x, node.pos.y);
+				else if (swapCoords == SCT_SWAP_X_AND_Z)
+					std::swap(node.pos.x, node.pos.z);
+				else if (swapCoords == SCT_SWAP_Y_AND_Z)
+					std::swap(node.pos.y, node.pos.z);
 			}
 
-			tinyxml2::XMLElement* xSim = root->FirstChildElement("simulation");
-			if (xSim)
+			// load the Dirichlet BCs
+			tinyxml2::XMLElement* xDirichlet = xModel->FirstChildElement("dirichlet");
+			if (xDirichlet)
 			{
-				const char* type = xSim->Attribute("type");
-				if (strcmp(type, "quasi-static") == 0)
+				const char* text = xDirichlet->GetText();
+				std::string str(text);
+				while (!str.empty())
 				{
-					femConfig.mSimType = ST_QUASI_STATIC;
+					size_t next;
+					int idx = std::stoi(str, &next);
+					fixedNodes.push_back(idx);
+					if (next >= str.size())
+						break;
+					if (str[next] == ',')
+						next++;
+					str = str.substr(next);
 				}
 
-				const char* method = xSim->Attribute("method");
-				if (strcmp(method, "nonlinear") == 0)
-				{
-					femConfig.mType = MT_NONLINEAR_ELASTICITY;
-				}
-				else if (strcmp(method, "mixed") == 0)
-				{
-					femConfig.mType = MT_INCOMPRESSIBLE_NONLINEAR_ELASTICITY;
-				}
+				Printf("%d pinned nodes\n", fixedNodes.size());
+			}
+		}
 
-				const char* str = xSim->Attribute("steps");
-				if (str)
-				{
-					int n = atoi(str);
-					femConfig.mForceApplicationStep = 1.0 / n;
-				}
-
-				str = xSim->Attribute("gravity");
-				if (str)
-				{
-					femConfig.mGravity = atof(str);
-				}
-
-				tinyxml2::XMLElement* xPressure = xSim->FirstChildElement("pressure");
-				if (xPressure)
-				{
-					const char* pressure = xPressure->Attribute("p");
-					if (pressure)
-					{
-						femConfig.mAppliedPressure = atof(pressure);
-					}
-
-					const char* text = xPressure->GetText();
-					std::string str(text);
-					while (!str.empty())
-					{
-						size_t next;
-						int idx;
-						try
-						{
-							idx = std::stoi(str, &next);
-							surfTris.push_back(idx);
-						}
-						catch (...)
-						{
-							break;
-						}
-						if (next >= str.size())
-							break;
-						str = str.substr(next);
-					}
-				}
+		tinyxml2::XMLElement* xMaterial = root->FirstChildElement("material");
+		if (xMaterial)
+		{
+			const char* name = xMaterial->Attribute("name");
+			if (strcmp(name, "neo-hookean") == 0)
+			{
+				femConfig.mMaterial = (MaterialModelType)MMT_NEO_HOOKEAN;
 			}
 
-			tinyxml2::XMLElement* xSolver = root->FirstChildElement("solver");
-			if (xSolver)
+			const char* str = xMaterial->Attribute("young");
+			if (str)
 			{
-				const char* iters = xSolver->Attribute("iterations");
-				if (iters)
+				femConfig.mYoungsModulus = atof(str);
+			}
+
+			str = xMaterial->Attribute("poisson");
+			if (str)
+			{
+				femConfig.mPoissonRatio = atof(str);
+			}
+
+			str = xMaterial->Attribute("density");
+			if (str)
+			{
+				femConfig.mDensity = atof(str);
+			}
+		}
+
+		tinyxml2::XMLElement* xSim = root->FirstChildElement("simulation");
+		if (xSim)
+		{
+			const char* type = xSim->Attribute("type");
+			if (strcmp(type, "quasi-static") == 0)
+			{
+				femConfig.mSimType = ST_QUASI_STATIC;
+			}
+
+			const char* method = xSim->Attribute("method");
+			if (strcmp(method, "nonlinear") == 0)
+			{
+				femConfig.mType = MT_NONLINEAR_ELASTICITY;
+			}
+			else if (strcmp(method, "mixed") == 0)
+			{
+				femConfig.mType = MT_INCOMPRESSIBLE_NONLINEAR_ELASTICITY;
+			}
+
+			const char* str = xSim->Attribute("steps");
+			if (str)
+			{
+				int n = atoi(str);
+				femConfig.mForceApplicationStep = 1.0 / n;
+			}
+
+			str = xSim->Attribute("gravity");
+			if (str)
+			{
+				femConfig.mGravity = atof(str);
+			}
+
+			tinyxml2::XMLElement* xPressure = xSim->FirstChildElement("pressure");
+			if (xPressure)
+			{
+				const char* pressure = xPressure->Attribute("p");
+				if (pressure)
 				{
-					femConfig.mOuterIterations = atoi(iters);
+					femConfig.mAppliedPressure = atof(pressure);
 				}
 
-				const char* tol = xSolver->Attribute("tolerance");
-				if (tol)
+				const char* text = xPressure->GetText();
+				std::string str(text);
+				while (!str.empty())
 				{
-					femConfig.mAbsNewtonRsidualThreshold = atof(tol);
+					size_t next;
+					int idx;
+					try
+					{
+						idx = std::stoi(str, &next);
+						surfTris.push_back(idx);
+					}
+					catch (...)
+					{
+						break;
+					}
+					if (next >= str.size())
+						break;
+					str = str.substr(next);
 				}
+			}
+		}
+
+		tinyxml2::XMLElement* xSolver = root->FirstChildElement("solver");
+		if (xSolver)
+		{
+			const char* iters = xSolver->Attribute("iterations");
+			if (iters)
+			{
+				femConfig.mOuterIterations = atoi(iters);
+			}
+
+			const char* tol = xSolver->Attribute("tolerance");
+			if (tol)
+			{
+				femConfig.mAbsNewtonRsidualThreshold = atof(tol);
 			}
 		}
 		

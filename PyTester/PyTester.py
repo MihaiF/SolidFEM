@@ -4,8 +4,10 @@ import matplotlib.pyplot as plt
 
 from mpl_toolkits.mplot3d import Axes3D
 
+# print something
 print('Hello!')
 
+# prepaper the FEM tetrahedron
 config = {
     "young": 66000,
     "poisson": 0.4,
@@ -16,10 +18,11 @@ tets = np.array([[0, 1, 2, 3]], dtype=np.int)
 nodes = np.array([[0, -hw, hw], [0, -hw, -hw], [0, hw, hw], [2 * hw, -hw, hw]], dtype=np.double)
 fixed_nodes = np.array([0, 1, 2]);
 
+# create the simulator
 fem = psf.NonlinearFEM(tets, nodes, fixed_nodes)
 fem.step()
-def_nodes = fem.get_nodes()
-print(def_nodes)
+nodes = fem.get_nodes()
+print(nodes)
 
 # plot the mesh   
 fig = plt.figure()             
@@ -31,4 +34,6 @@ z = pos[2::3]
 ax.scatter(x, y, z)
 plt.savefig('plot.png')
 
-
+# create the simulator from file
+fem = psf.NonlinearFEM('hammerbot.xml')
+fem.step()

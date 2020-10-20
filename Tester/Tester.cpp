@@ -38,6 +38,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "../Include/FemPhysicsLinearElasticity.h"
 #include "../Include/FemPhysicsMixed.h"
 #include "../Include/FemPhysicsMatrixFree.h"
+#include "../Include/FemIO.h"
 
 using namespace FEM_SYSTEM;
 
@@ -68,6 +69,24 @@ int main()
 	delete femPhysics;
 
 	femPhysics = new FemPhysicsMatrixFree(tets, nodes, config);
+	delete femPhysics;
+
+	std::cout << "Running in " << GetCurrentWorkingDir() << std::endl;
+
+	// load the tet file
+	nodes.clear();
+	tets.clear();
+	IO::LoadFromTet1File("hammerbot_fine.tet", 0.01, Vector3R(), nodes, tets);
+	// FIXME
+	for (size_t i = 0; i < nodes.size(); i++)
+	{
+		nodes[i].pos0 = nodes[i].pos;
+	}
+	nodes[0].invMass = 0;
+
+	femPhysics = new FemPhysicsMatrixFree(tets, nodes, config);
+	femPhysics->Step(0);
+
 	delete femPhysics;
 }
 
