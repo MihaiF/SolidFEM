@@ -6,6 +6,17 @@ from mpl_toolkits.mplot3d import Axes3D
 
 from Simulator import Simulator
 
+def plot_nodes(nodes):
+    # plot the mesh   
+    fig = plt.figure()             
+    ax = fig.add_subplot(111, projection='3d')
+    pos = nodes.flatten()
+    x = pos[0::3]
+    y = pos[1::3]
+    z = pos[2::3]
+    ax.scatter(x, z, y)
+    plt.savefig('plot.png')
+
 # print something
 print('Hello!')
 
@@ -25,7 +36,7 @@ config = {
 hw = 0.05
 tets = np.array([[0, 1, 2, 3]], dtype=np.int)
 nodes = np.array([[0, -hw, hw], [0, -hw, -hw], [0, hw, hw], [2 * hw, -hw, hw]], dtype=np.double)
-fixed_nodes = np.array([0, 1, 2]);
+fixed_nodes = np.array([0, 1, 2])
 
 # create the simulator
 fem = psf.NonlinearFEM(tets, nodes, fixed_nodes, config)
@@ -39,22 +50,21 @@ for i in range(0, numSteps):
     print(nodes1)
     fem.save_to_vtk('tetrahedron{0}.vtk'.format(i+1))
 
-# plot the mesh   
-fig = plt.figure()             
-ax = fig.add_subplot(111, projection='3d')
-pos = nodes.flatten()
-x = pos[0::3]
-y = pos[1::3]
-z = pos[2::3]
-ax.scatter(x, z, y)
-plt.savefig('plot.png')
-
 # Python simulator
-particle_mass = np.array([0, 0, 0, 1], dtype=np.int)
-sim = Simulator(nodes, tets, particle_mass)
-nodes2 = sim.step()
-nodes2 = sim.step()
-print(nodes2)
+#sim = Simulator(nodes, tets, fixed_nodes)
+#sim.step_explicit()
+#nodes3 = sim.step_explicit()
+#print(nodes3)
+
+N, T, F = psf.load_from_xml('hammerbot.xml')
+print(N)
+hammerbot = Simulator(N, T.flatten(), F)
+hammerbot.dt = 0.016 / 200
+for i in range(0, 10):
+    print('.', end='')
+    nodes4 = hammerbot.step()
+print(nodes4)
+plot_nodes(nodes4)
 
 # create the simulator from file
 #fem = psf.NonlinearFEM('hammerbot.xml')

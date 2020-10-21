@@ -36,6 +36,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <Include/FemIO.h>
 #include <pybind11/iostream.h>
 #include <pybind11/numpy.h>
+#include <pybind11/stl.h>
 
 namespace py = pybind11;
 
@@ -50,6 +51,7 @@ public:
 	PyNonlinearFEM(py::str path);
 	void Step(real dt = DT) { mPhys->Step(dt); }
 	py::array_t<double> GetNodes() const;
+	py::array_t<int> GetTets() const;
 	void SaveToVTK(py::str path);
 
 private:
@@ -164,6 +166,21 @@ py::array_t<double> PyNonlinearFEM::GetNodes() const
 	return result;
 }
 
+py::array_t<int> PyNonlinearFEM::GetTets() const
+{
+	int numTets = mPhys->GetNumElements();
+	py::array_t<int> result = py::array_t<int>(numTets * 4);
+	py::buffer_info buf = result.request();
+	int* ptr = (int*)buf.ptr;
+	for (int i = 0; i < numTets; i++)
+	{
+		for (int j = 0; j < 4; j++)
+			ptr[i * 4 + j] = mPhys->GetGlobalIndex(i, j);
+	}
+	result.resize({ numTets, 4 });
+	return result;
+}
+
 void PyNonlinearFEM::SaveToVTK(py::str path)
 {
 	Printf("Saving VTK file\n");
@@ -197,7 +214,52 @@ FEM_SYSTEM::FemConfig PyNonlinearFEM::ParseConfig(py::dict config)
 	return nConfig;
 }
 
+py::tuple PyLoadFromXml(py::str path)
+{
+	std::cout << "Running in " << GetCurrentWorkingDir() << std::endl;
+
+	// load the setup file
+	std::vector<Node> nodes;
+	std::vector<Tet> tets;
+	std::vector<int> fixedNodes;
+	std::vector<uint32> surfTris;
+	FemConfig config; // default config
+	IO::LoadFromXmlFile(std::string(path).c_str(), nodes, tets, fixedNodes, surfTris, config);
+
+	int numNodes = nodes.size();
+	py::array_t<double> pyNodes = py::array_t<double>(numNodes * 3);
+	{
+		// allocate the buffer
+		py::buffer_info buf = pyNodes.request();
+		double* ptr = (double*)buf.ptr;
+		for (int i = 0; i < numNodes; i++)
+		{
+			for (int j = 0; j < 3; j++)
+				ptr[i * 3 + j] = nodes[i].pos[j];
+		}
+		pyNodes.resize({ numNodes, 3 });
+	}
+
+	int numTets = tets.size();
+	py::array_t<int> pyTets = py::array_t<int>(numTets * 4);
+	{
+		py::buffer_info buf = pyTets.request();
+		int* ptr = (int*)buf.ptr;
+		for (int i = 0; i < numTets; i++)
+		{
+			for (int j = 0; j < 4; j++)
+				ptr[i * 4 + j] = tets[i].idx[j];
+		}
+		pyTets.resize({ numTets, 4 });
+	}
+
+	py::list pyFixed = py::cast(fixedNodes);
+	return py::make_tuple(pyNodes, pyTets, pyFixed);
+}
+
+
 PYBIND11_MODULE(pysolidfem, m) {
+	m.def("load_from_xml", &PyLoadFromXml);
 	py::class_<PyNonlinearFEM>(m, "NonlinearFEM")
 		.def(py::init<py::array_t<int>, py::array_t<double>, py::array_t<int>, py::dict>())
 		.def(py::init<py::str>())
