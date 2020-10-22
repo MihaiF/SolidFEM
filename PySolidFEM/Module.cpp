@@ -58,7 +58,8 @@ private:
 	FemConfig ParseConfig(py::dict config);
 
 private:
-	std::unique_ptr< FemPhysicsMatrixFree> mPhys;
+	std::unique_ptr<FemPhysicsMatrixFree> mPhys;
+	FemPhysicsMatrixFree::Config mNonlinConfig;
 };
 
 PyNonlinearFEM::PyNonlinearFEM(py::array_t<int> tets, py::array_t<double> nodes, py::array_t<int> fixed_nodes, py::dict config)
@@ -66,20 +67,19 @@ PyNonlinearFEM::PyNonlinearFEM(py::array_t<int> tets, py::array_t<double> nodes,
 	// read the tets
 	py::buffer_info buf = tets.request();
 	int rows = (int)buf.shape[0];
-	int cols = (int)buf.shape[1]; // should be 4
+	int cols = (int)buf.shape[1]; // should be 4 ideally
 	if (cols != 4)
 	{
-		std::cout << "Tets should have 4 columns" << std::endl;
-		return;
+		rows = rows / 4;
 	}
 	// create the native tets
 	std::vector<Tet> nTets(rows);
 	int* ptr = (int*)buf.ptr;
 	for (int i = 0; i < rows; i++)
 	{
-		for (int j = 0; j < cols; j++)
+		for (int j = 0; j < 4; j++)
 		{
-			nTets[i].idx[j] = ptr[i * cols + j];
+			nTets[i].idx[j] = ptr[i * 4 + j];
 		}
 	}
 	// read the nodes
@@ -143,10 +143,9 @@ PyNonlinearFEM::PyNonlinearFEM(py::str path)
 
 	// create the FEM object
 	config.mMaterial = (MaterialModelType)MMT_NEO_HOOKEAN;
-	FemPhysicsMatrixFree::Config nonlinConfig;
-	nonlinConfig.mSolver = NST_NEWTON_LS;
-	nonlinConfig.mOptimizer = false;
-	config.mCustomConfig = &nonlinConfig;
+	mNonlinConfig.mSolver = NST_NEWTON_LS;
+	mNonlinConfig.mOptimizer = false;
+	config.mCustomConfig = &mNonlinConfig;
 	mPhys.reset(new FemPhysicsMatrixFree(tets, nodes, config));
 }
 
@@ -206,11 +205,19 @@ FEM_SYSTEM::FemConfig PyNonlinearFEM::ParseConfig(py::dict config)
 	{
 		nConfig.mSimType = (SimulationType)py::cast<int>(config["simtype"]);
 	}
+	if (config.contains("substeps"))
+	{
+		nConfig.mNumSubsteps = py::cast<int>(config["substeps"]);
+	}
+	if (config.contains("maxiter"))
+	{
+		nConfig.mOuterIterations = py::cast<int>(config["maxiter"]);
+	}
 	nConfig.mMaterial = (MaterialModelType)MMT_NEO_HOOKEAN;
-	FemPhysicsMatrixFree::Config nonlinConfig;
-	nonlinConfig.mSolver = NST_NEWTON_LS;
-	nonlinConfig.mOptimizer = false;
-	nConfig.mCustomConfig = &nonlinConfig;
+	nConfig.mAbsNewtonRsidualThreshold = 1e-17;
+	mNonlinConfig.mSolver = NST_NEWTON_LS;
+	mNonlinConfig.mOptimizer = true;
+	nConfig.mCustomConfig = &mNonlinConfig;
 	return nConfig;
 }
 

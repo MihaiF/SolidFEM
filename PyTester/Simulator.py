@@ -1,24 +1,31 @@
 import numpy as np
 import math
+from scipy.optimize import minimize
 
 class Simulator:
 
-    dt = 0.016
     gravity = np.array([0, -9.8, 0])
     young = 66000
-    poisson = 0.4
+    poisson = 0.45
     density = 1070
 
     def __init__(self,
                 nodes,
                 tets,
-                fixed_nodes
+                fixed_nodes,
+                config
         ):
         """
         @param nodes: Array of node positions
         @param tets: Array of tetrahedra indices
         @param fixed_nodes: Array of indices indicating fixed nodes
+        @param config: Dictionary containing configuration
         """        
+        self.substeps = 1
+        if "substeps" in config:
+            self.substeps = config["substeps"]
+        self.dt = 0.016 / self.substeps
+            
         # init members
         self.nodes = nodes
         numTets = math.ceil(tets.shape[0] / 4)
@@ -29,7 +36,7 @@ class Simulator:
         self.volumes = []
         self.jacobians = []
         for e, tet in enumerate(self.tets):            
-            # get the 4 points
+            # get the 4 points            
             x0 = self.nodes[tet[0]]
             x1 = self.nodes[tet[1]]
             x2 = self.nodes[tet[2]]
@@ -59,7 +66,9 @@ class Simulator:
         self.la = self.young * self.poisson / (1 + self.poisson) / (1 - 2 * self.poisson)        
         
     def step(self):
-        return self.step_explicit()
+        for iter in range(0, self.substeps):
+            self.step_explicit()
+        return self.nodes
         
     def step_explicit(self):  
         # compute forces
@@ -70,19 +79,45 @@ class Simulator:
         return self.nodes
     
     def step_static(self):
-        # gradient descent
-        numIters = 100
-        alpha = 1e-3
+        #return self.solve_grad_desc()
+        return self.solve_scipy()
+
+    def solve_scipy(self):
+        x0 = self.nodes[self.free].flatten()
+        sol = minimize(self.energy_objective, x0, method='Newton-CG', jac=self.jacobian)
+        print(sol.message)
+        self.nodes[self.free] = np.reshape(sol.x, (int(sol.x.shape[0] / 3), 3))
+        return self.nodes
+        
+    def energy_objective(self, x):
+        self.nodes[self.free] = np.reshape(x, (int(x.shape[0] / 3), 3))
+        energy = self.compute_energy()
+        #print(energy)
+        return energy
+    
+    def jacobian(self, x):
+        self.nodes[self.free] = np.reshape(x, (int(x.shape[0] / 3), 3))
+        g = -self.compute_gradients()
+        return g[self.free].flatten()
+        
+    def solve_grad_desc(self, alpha = 1e-2, numIters = 1000, rel_tol=1e-9):
+        # gradient descent   
         energy = self.compute_energy()
         for iter in range(0, numIters):
             f = self.compute_gradients()            
             self.nodes[self.free] = self.nodes[self.free] + alpha * f[self.free]
-            old_energy = energy;
+            #print(energy)
+            old_energy = energy;            
             energy = self.compute_energy()
             rel_err = abs((energy - old_energy) / energy)
-            if rel_err < 1e-15:
+            #print(rel_err)
+            if rel_err < rel_tol:
                 print('Converged after {0} iterations'.format(iter+1))
                 break
+            if energy > old_energy:
+                print('Not converging')
+                break
+        print(energy)
         return self.nodes
 
     # returns the elstic forces
@@ -118,6 +153,8 @@ class Simulator:
         for e, tet in enumerate(self.tets):
             F = self.compute_deformation_gradient(e)
             J = np.linalg.det(F)
+            if J < 0:
+                return float('inf')
             C = np.matmul(np.transpose(F), F)
             I1 = np.trace(C)
             logJ = math.log(J)
