@@ -216,6 +216,8 @@ class TorchSimulatorFast:
         # compute volumes and masses
         self.volumes = []
         self.jacobians = []
+        self.torch_jacobians = torch.zeros((self.tets.shape[0], 3, 3))
+        self.torch_volumes = torch.zeros(self.tets.shape[0])
         for e, tet in enumerate(self.tets):
             # get the 4 points
             x0 = self.nodes[tet[0]]
@@ -230,8 +232,10 @@ class TorchSimulatorFast:
             D = torch.cat([d1.view(-1, *d1.shape), d2.view(-1, *d2.shape), d3.view(-1, *d3.shape)], dim=0).T
             vol = torch.det(D) / 6.0
             self.volumes.append(vol)
+            self.torch_volumes[e] = vol
             Dinv = torch.inverse(D)
             self.jacobians.append(Dinv.T)
+            self.torch_jacobians[e, :, :] = Dinv.T
             # compute the element mass
             mass = 0.25 * vol * self.density
             self.masses[tet[0]] += mass;
@@ -277,6 +281,12 @@ class TorchSimulatorFast:
                 break
         print(energy)
 
+    def compute_forces_batched(self):
+        P = self.compute_stress_batched()
+        H_ = -self.torch_volumes[:, None, None] * torch.bmm(P_, self.torch_jacobians)
+        # TODO: implement f
+
+
     # returns the elastic forces
     def compute_forces(self):
         f = torch.zeros(self.nodes.shape, dtype=torch.float, device=self.device)
@@ -313,6 +323,22 @@ class TorchSimulatorFast:
                                (self.gravity[1] * self.masses[:, 0] * inv_masses).T)
         return energy
 
+    def compute_elastic_energy_batched(self):
+        F = self.compute_deformation_gradient_batched()
+        J = torch.det(F)
+        if any(J < 0):
+            return float('inf')
+        C = torch.bmm(torch.transpose(F, -1, -2), F)
+        # TODO: Optimize this part - I couldn't find a map/apply function in torch...
+        I1 = torch.zeros(C.shape[0], dtype=torch.float, device=self.device)
+        for i in range(self.tets.shape[0]):
+            I1[i] = torch.trace(C[i])
+        logJ = torch.log(J)
+        E = 0.5 * self.mu * (I1 - 3) - self.mu * logJ + 0.5 * self.la * logJ * logJ
+
+        energy = torch.sum(E)
+        return energy
+
     def compute_elastic_energy(self):
         energy = 0
         for e, tet in enumerate(self.tets):
@@ -330,6 +356,16 @@ class TorchSimulatorFast:
         E = 0.5 * self.mu * (I1 - 3) - self.mu * logJ + 0.5 * self.la * logJ * logJ;
         return self.volumes[e] * E
 
+    def compute_stress_batched(self):
+        F = self.compute_deformation_gradient_batched()
+        Fi = torch.inverse(F)
+        Fit = torch.transpose(Fi, -1, -2)
+        J = torch.det(F)
+        print(J.shape, Fit.shape)
+        P = self.mu * (F - Fit) + self.la * torch.log(J)[:, None, None] * Fit
+        return P
+
+
     def compute_stress(self, e):
         F = self.compute_deformation_gradient(e)
         # Neo-Hookean
@@ -338,6 +374,16 @@ class TorchSimulatorFast:
         J = torch.det(F)
         P = self.mu * (F - Fit) + self.la * math.log(J) * Fit;
         return P
+
+    def compute_deformation_gradient_batched(self):
+        xs = self.nodes[self.tets]
+        d1_ = xs[:, 1] - xs[:, 0]
+        d2_ = xs[:, 2] - xs[:, 0]
+        d3_ = xs[:, 3] - xs[:, 0]
+        D_ = torch.cat([d1_, d2_, d3_], dim=1)
+        D_ = torch.transpose(D_.reshape(D_.shape[0], 3, 3), -1, -2)
+        F_ = torch.bmm(D_, torch.transpose(self.torch_jacobians, -1, -2))
+        return F_
 
     def compute_deformation_gradient(self, e):
         tet = self.tets[e]
