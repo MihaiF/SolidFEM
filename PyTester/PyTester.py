@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 
 from mpl_toolkits.mplot3d import Axes3D
 from Simulator import Simulator
+from TorchSimulator import TorchSimulator
 from utils import read_tetfile
 
 def plot_nodes(nodes):
@@ -122,6 +123,13 @@ def test_cantilever():
     print(nodes2[-1])
     plot_nodes(nodes2)
 
+    # Python torch simulator
+    sim2 = TorchSimulator(verts, indices, fixed2, config, device='cpu')
+    for iter in range(0, num_steps):
+        sim2.step()
+    print(sim2.nodes[-1])
+    plot_nodes(sim2.nodes)
+
 def test_cantilever_static():
     config = {
         "young": 66000,
@@ -146,11 +154,16 @@ def test_cantilever_static():
     plot_nodes(nodes2)
 
     # Python simulator
-    sim2 = Simulator(verts, indices, fixed2, config)
-    nodes2 = sim2.step_static()
-    print(nodes2[-1])
-    plot_nodes(nodes2)
+    #sim2 = Simulator(verts, indices, fixed2, config)
+    #nodes2 = sim2.step_static()
+    #print(nodes2[-1])
+    #plot_nodes(nodes2)
 
+    # Python torch simulator
+    sim2 = TorchSimulator(verts, indices, fixed2, config)
+    sim2.solve_grad_desc(3e-5)
+    print(sim2.nodes[-1])
+    plot_nodes(sim2.nodes)
 
 def test_hammerbot():
     config = {
