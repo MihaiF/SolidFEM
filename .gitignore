@@ -12,3 +12,4 @@
 *.png
 /PySolidFEM/x64/Debug
 /PyTester/__pycache__/Simulator.cpython-37.pyc
+*.pyc
