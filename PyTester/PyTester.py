@@ -161,7 +161,7 @@ def test_cantilever_static():
 
     # Python torch simulator
     sim2 = TorchSimulator(verts, indices, fixed2, config)
-    sim2.solve_grad_desc(3e-5)
+    sim2.solve_grad_desc(3e-5, 70000, 1e-15, 0.1)
     print(sim2.nodes[-1])
     plot_nodes(sim2.nodes)
 
@@ -180,6 +180,13 @@ def test_hammerbot():
     nodes = fem.get_nodes()
     fem.save_to_vtk("hammerbot.vtk")
     
+    # load the hammerbot
+    verts, indices = read_tetfile('hammerbot_fine.tet')
+    fixed2 = [261, 262, 263, 264, 265, 266, 267, 268, 269, 270, 271, 272, 273, 274, 275, 276, 277, 278, 279, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289, 290, 291, 292, 293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 307, 308, 309, 310, 311, 312, 313, 314, 315, 316, 317, 318, 319, 320, 321, 1308, 1309, 1310, 1311, 1312, 1313, 1322, 1323, 1324, 1325, 1334, 1335, 1336, 1337, 1357, 1436, 1492, 1496, 1523, 1564, 1600, 1602, 1656, 1663, 1682, 1800, 1804, 1894, 2168, 2240, 2260]
+    sim2 = TorchSimulator(verts, indices, fixed2, config, 'cuda')
+    sim2.solve_grad_desc(3e-5, 70000, 1e-15, 0.1)
+    plot_nodes(sim2.nodes)
+
     #N, T, F = psf.load_from_xml('hammerbot.xml')
     #print(N)
     #hammerbot = Simulator(N, T.flatten(), F, config)
@@ -187,6 +194,7 @@ def test_hammerbot():
     #plot_nodes(nodes4)
 
 test_cantilever_static()
+#test_hammerbot()
 
 # explicit integration
 #fem = psf.NonlinearFEM('hammerbot_explicit.xml')

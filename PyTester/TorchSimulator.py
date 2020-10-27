@@ -43,7 +43,7 @@ class TorchSimulator:
         self.masses = torch.zeros(numNodes, dtype=torch.float, device=self.device)
         self.vel = torch.zeros(nodes.shape, dtype=torch.float, device=self.device)
         # build shape matrices (batch)
-        self.indices = torch.from_numpy(tets).to(self.device)
+        self.indices = torch.from_numpy(tets).long().to(self.device)
         self.idx0 = self.indices[0::4]
         self.idx1 = self.indices[1::4]
         self.idx2 = self.indices[2::4]
@@ -67,7 +67,7 @@ class TorchSimulator:
         # compute inverse masses
         self.inv_masses = torch.zeros_like(self.masses, dtype=torch.float, device=self.device)
         free_idx = np.setdiff1d(range(0, nodes.shape[0]), fixed_nodes)
-        self.free = torch.from_numpy(free_idx).to(self.device)
+        self.free = torch.from_numpy(free_idx).long().to(self.device)
         self.inv_masses[self.free] = 1.0 / self.masses[self.free]
         # init params
         self.mu = 0.5 * self.young / (1 + self.poisson)
@@ -86,29 +86,28 @@ class TorchSimulator:
         self.nodes[self.free] = self.nodes[self.free] + self.dt * self.vel[self.free]
 
     # gradient descent static solver
-    def solve_grad_desc(self, alpha = 1e-2, numIters = 1000, rel_tol=1e-9):
+    def solve_grad_desc(self, alpha = 1e-2, numIters = 1000, rel_tol=1e-15, abs_tol = 0.1, c1 = 1e-3):
         # gradient descent
         self.compute_def_grads()
         f = self.compute_gradients()
+        sqNorm = torch.matmul(f[self.free].view(-1), f[self.free].view(-1))
         energy = self.compute_energy()
         for iter in range(0, numIters):            
             self.nodes[self.free] = self.nodes[self.free] + alpha * f[self.free]
             # update gradients and energy
             self.compute_def_grads()
             f = self.compute_gradients()
+            sqNorm = torch.matmul(f[self.free].view(-1), f[self.free].view(-1))
             old_energy = energy
             energy = self.compute_energy()
-            #print(energy)            
-            rel_err = abs((energy - old_energy) / energy)
-            #print(rel_err)
-            # if rel_err < rel_tol:
-            #     print('Converged after {0} iterations'.format(iter+1))
-            #     break
-            if energy > old_energy:
-                print('Not converging')
+            rel_err = (energy - old_energy) / energy
+            if energy > old_energy + c1 * sqNorm:
+                print('Not converging at iteration {}'.format(iter + 1))
                 break
-        print(energy)
-        print(rel_err)
+            if abs(rel_err) < rel_tol and sqNorm < abs_tol * abs_tol:
+                print('Converged after {0} iterations'.format(iter+1))
+                break        
+        print('energy: {0}, rel change: {1}, grad norm: {2}'.format(energy, rel_err, torch.sqrt(sqNorm)))
 
     # returns the elastic forces
     def compute_def_grads(self):

@@ -26,6 +26,7 @@
   <ItemGroup>
     <Compile Include="PyTester.py" />
     <Compile Include="Simulator.py" />
+    <Compile Include="TorchSimulator.py" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\PySolidFEM\PySolidFEM.vcxproj">
