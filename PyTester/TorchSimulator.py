@@ -86,7 +86,7 @@ class TorchSimulator:
         self.nodes[self.free] = self.nodes[self.free] + self.dt * self.vel[self.free]
 
     # gradient descent static solver
-    def solve_grad_desc(self, alpha = 1e-2, numIters = 1000, rel_tol=1e-15, abs_tol = 0.1, c1 = 1e-3):
+    def solve_grad_desc(self, alpha = 1e-2, numIters = 1000, rel_tol=1e-15, abs_tol = 0.1, c1 = 1e-3, freq = 1000):
         # gradient descent
         self.compute_def_grads()
         f = self.compute_gradients()
@@ -98,16 +98,19 @@ class TorchSimulator:
             self.compute_def_grads()
             f = self.compute_gradients()
             sqNorm = torch.matmul(f[self.free].view(-1), f[self.free].view(-1))
+            grad_norm = torch.sqrt(sqNorm)
             old_energy = energy
             energy = self.compute_energy()
+            if iter % freq == 0:
+                print(energy.item())
             rel_err = (energy - old_energy) / energy
             if energy > old_energy + c1 * sqNorm:
                 print('Not converging at iteration {}'.format(iter + 1))
                 break
-            if abs(rel_err) < rel_tol and sqNorm < abs_tol * abs_tol:
+            if abs(rel_err) < rel_tol and grad_norm < abs_tol:
                 print('Converged after {0} iterations'.format(iter+1))
                 break        
-        print('energy: {0}, rel change: {1}, grad norm: {2}'.format(energy, rel_err, torch.sqrt(sqNorm)))
+        print('energy: {0}, rel change: {1}, grad norm: {2}'.format(energy, rel_err, grad_norm))
 
     # returns the elastic forces
     def compute_def_grads(self):
