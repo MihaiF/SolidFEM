@@ -1,4 +1,5 @@
 import torch
+import torch.optim
 import numpy as np
 import math
 
@@ -37,6 +38,7 @@ class TorchSimulator:
 
         # init FEM configuration
         self.nodes = torch.from_numpy(nodes).float().to(self.device)
+        self.nodes.requires_grad_(True)
         numTets = math.ceil(tets.shape[0] / 4)
         numNodes = nodes.shape[0]
         self.tets = tets.reshape((numTets, 4))
@@ -85,22 +87,42 @@ class TorchSimulator:
         self.vel[self.free] = self.vel[self.free] + self.dt * (self.gravity + self.inv_masses[self.free] * f[self.free])
         self.nodes[self.free] = self.nodes[self.free] + self.dt * self.vel[self.free]
 
+    def solve_torch(self):
+        optimizer = torch.optim.LBFGS([self.nodes], lr=1e-7)
+
+        def closure():
+            optimizer.zero_grad()
+            self.compute_def_grads()
+            E = self.compute_energy()
+            E.backward(retain_graph = True)
+            return E
+        
+        for iter in range(10):
+            optimizer.step(closure)
+        
     # gradient descent static solver
-    def solve_grad_desc(self, alpha = 1e-2, numIters = 1000, rel_tol=1e-15, abs_tol = 0.1, c1 = 1e-3, freq = 1000):
+    def solve_grad_desc(self, alpha = 1e-2, numIters = 1000, rel_tol=1e-15, abs_tol = 0.1, c1 = 1e-3, freq = 1000):        
         # gradient descent
         self.compute_def_grads()
-        f = self.compute_gradients()
-        sqNorm = torch.matmul(f[self.free].view(-1), f[self.free].view(-1))
+        f = self.compute_gradients()        
         energy = self.compute_energy()
-        for iter in range(0, numIters):            
-            self.nodes[self.free] = self.nodes[self.free] + alpha * f[self.free]
+        energy.backward(retain_graph=True)
+        #f_auto = -self.nodes.grad
+        sqNorm = torch.matmul(f[self.free].view(-1), f[self.free].view(-1))
+        #print(f_auto[10])
+        #print(f[10])
+        for iter in range(0, numIters):        
+            with torch.no_grad():
+                self.nodes[self.free] = self.nodes[self.free] + alpha * f[self.free]
             # update gradients and energy
             self.compute_def_grads()
             f = self.compute_gradients()
-            sqNorm = torch.matmul(f[self.free].view(-1), f[self.free].view(-1))
-            grad_norm = torch.sqrt(sqNorm)
             old_energy = energy
             energy = self.compute_energy()
+            energy.backward(retain_graph=True)
+            #f_auto = -self.nodes.grad
+            sqNorm = torch.matmul(f[self.free].view(-1), f[self.free].view(-1))
+            grad_norm = torch.sqrt(sqNorm)
             if iter % freq == 0:
                 print(energy.item())
             rel_err = (energy - old_energy) / energy
@@ -159,7 +181,9 @@ class TorchSimulator:
     def compute_energy(self):
         energy = self.compute_elastic_energy()
         G = self.masses * torch.matmul(self.nodes, self.gravity)
-        return energy - G[self.free].sum(-1) # drop the self.free
+        energy -= G[self.free].sum(-1) # drop the self.free
+        #print(energy.item())
+        return energy
 
     def compute_elastic_energy(self):        
         # compute the per element energies
