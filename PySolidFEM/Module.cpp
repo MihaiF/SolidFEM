@@ -144,7 +144,7 @@ PyNonlinearFEM::PyNonlinearFEM(py::str path)
 	// create the FEM object
 	config.mMaterial = (MaterialModelType)MMT_NEO_HOOKEAN;
 	mNonlinConfig.mSolver = NST_NEWTON_LS;
-	mNonlinConfig.mOptimizer = false;
+	mNonlinConfig.mOptimizer = true;
 	config.mCustomConfig = &mNonlinConfig;
 	mPhys.reset(new FemPhysicsMatrixFree(tets, nodes, config));
 }
