@@ -1,6 +1,7 @@
 import pysolidfem as psf
 import numpy as np
 import matplotlib.pyplot as plt
+import torch
 
 from mpl_toolkits.mplot3d import Axes3D
 from Simulator import Simulator
@@ -38,7 +39,7 @@ def test_tetrahedron():
 
     # tetrahedron
     hw = 0.05
-    tets = np.array([[0, 1, 2, 3]], dtype=np.int)
+    tets = np.array([0, 1, 2, 3], dtype=np.int)
     nodes = np.array([[0, -hw, hw], [0, -hw, -hw], [0, hw, hw], [2 * hw, -hw, hw]], dtype=np.double)
     fixed_nodes = np.array([0, 1, 2])
 
@@ -54,7 +55,7 @@ def test_tetrahedron():
         print(nodes1)
         fem.save_to_vtk('tetrahedron{0}.vtk'.format(i+1))
 
-    # Python simulator
+    # Python simulator    
     sim = Simulator(nodes, tets, fixed_nodes, config)
     nodes3 = sim.step_explicit()
     nodes3 = sim.step_explicit()
@@ -62,8 +63,8 @@ def test_tetrahedron():
 
 def test_tetrahedron_static():
     config = {
-        "young": 66000,
-        "poisson": 0.45,
+        "young": 10000,
+        "poisson": 0.49,
         "simtype": 0,
         "substeps": 1,
         'maxiter': 100,
@@ -71,8 +72,8 @@ def test_tetrahedron_static():
 
     # tetrahedron
     hw = 0.05
-    tets = np.array([[0, 1, 2, 3]], dtype=np.int)
-    nodes = np.array([[0, -hw, hw], [0, -hw, -hw], [0, hw, hw], [2 * hw, -hw, hw]], dtype=np.double)
+    tets = np.array([0, 1, 2, 3], dtype=np.int)
+    nodes = np.array([[0, -hw, hw], [0, -hw, -hw], [0, hw, hw], [2 * hw, -hw, hw]], dtype=np.float)
     fixed_nodes = np.array([0, 1, 2])
 
     # create the simulator
@@ -87,9 +88,19 @@ def test_tetrahedron_static():
 
     # Python simulator
     sim = Simulator(nodes, tets, fixed_nodes, config)
-    #nodes3 = sim.solve_grad_desc(2e-3, 100, 1e-12)
-    nodes3 = sim.solve_scipy()
-    print(nodes3)
+    #sim.solve_grad_desc(2e-3, 100, 1e-12)
+    #sim.solve_steep_desc(num_iters=10)
+    #sim.solve_conj_grad(2)
+    sim.solve_scipy()
+    print(sim.nodes)
+
+    # parameter estimation
+    sim1 = Simulator(nodes, tets, fixed_nodes, config)
+    sim1.mu = 100
+    sim1.la = 1000
+    sim1.estimate_params(sim.nodes)
+    print(sim.mu, sim.la)
+    print(sim1.nodes)
 
 def test_cantilever():
     config = {
@@ -145,25 +156,35 @@ def test_cantilever_static():
     num_steps = 10
 
     # C++ simulator
-    sim2 = psf.NonlinearFEM(indices, verts, fixed2, config)
-    nodes2 = sim2.get_nodes()
-    sim2.step()
-    nodes2 = sim2.get_nodes()
-    sim2.save_to_vtk('cantilever.vtk')
+    simC = psf.NonlinearFEM(indices, verts, fixed2, config)
+    nodes2 = simC.get_nodes()
+    simC.step()
+    nodes2 = simC.get_nodes()
+    simC.save_to_vtk('cantilever.vtk')
     print(nodes2[-1])
-    plot_nodes(nodes2)
-
-    # Python simulator
-    #sim2 = Simulator(verts, indices, fixed2, config)
-    #nodes2 = sim2.step_static()
-    #print(nodes2[-1])
     #plot_nodes(nodes2)
 
-    # Python torch simulator
+    target = torch.from_numpy(nodes2).float().to('cpu')
+
+    # Python simulator
+    sim = Simulator(verts, indices, fixed2, config)
+    #sim.solve_scipy()
+    #sim.solve_conj_grad(400)
+    print(sim.nodes[-1])
+
+    # parameter estimation
+    sim1 = Simulator(verts, indices, fixed2, config)
+    #sim1.nodes = nodes2 # warm start
+    sim1.mu = 1000
+    sim1.la = 10000
+    sim1.estimate_params(nodes2)
+    print(sim1.nodes[-1])
+
+    # Python torch simulator used for estimation
     sim2 = TorchSimulator(verts, indices, fixed2, config)
     sim2.solve_grad_desc(3e-5, 70000, 1e-15, 0.1)
     print(sim2.nodes[-1])
-    plot_nodes(sim2.nodes)
+    #print(sim2.nodes[-1])
 
 def test_hammerbot():
     config = {
@@ -193,6 +214,8 @@ def test_hammerbot():
     #nodes4 = hammerbot.step()
     #plot_nodes(nodes4)
 
+torch.set_printoptions(precision=8)
+#test_tetrahedron_static()
 test_cantilever_static()
 #test_hammerbot()
 

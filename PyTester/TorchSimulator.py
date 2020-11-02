@@ -7,8 +7,6 @@ from torch_scatter import scatter_add
 
 class TorchSimulator:
 
-    young = 66000
-    poisson = 0.45
     density = 1070    
 
     def __init__(self,
@@ -38,7 +36,7 @@ class TorchSimulator:
 
         # init FEM configuration
         self.nodes = torch.from_numpy(nodes).float().to(self.device)
-        self.nodes.requires_grad_(True)
+        #self.nodes.requires_grad_(True)
         numTets = math.ceil(tets.shape[0] / 4)
         numNodes = nodes.shape[0]
         self.tets = tets.reshape((numTets, 4))
@@ -72,6 +70,8 @@ class TorchSimulator:
         self.free = torch.from_numpy(free_idx).long().to(self.device)
         self.inv_masses[self.free] = 1.0 / self.masses[self.free]
         # init params
+        self.young = config["young"]
+        self.poisson = config["poisson"]
         self.mu = 0.5 * self.young / (1 + self.poisson)
         self.la = self.young * self.poisson / (1 + self.poisson) / (1 - 2 * self.poisson)
 
@@ -106,7 +106,7 @@ class TorchSimulator:
         self.compute_def_grads()
         f = self.compute_gradients()        
         energy = self.compute_energy()
-        energy.backward(retain_graph=True)
+        #energy.backward(retain_graph=True)
         #f_auto = -self.nodes.grad
         sqNorm = torch.matmul(f[self.free].view(-1), f[self.free].view(-1))
         #print(f_auto[10])
@@ -119,12 +119,12 @@ class TorchSimulator:
             f = self.compute_gradients()
             old_energy = energy
             energy = self.compute_energy()
-            energy.backward(retain_graph=True)
+            #energy.backward(retain_graph=True)
             #f_auto = -self.nodes.grad
             sqNorm = torch.matmul(f[self.free].view(-1), f[self.free].view(-1))
             grad_norm = torch.sqrt(sqNorm)
             if iter % freq == 0:
-                print(energy.item())
+                print('energy: ', energy.item())
             rel_err = (energy - old_energy) / energy
             if energy > old_energy + c1 * sqNorm:
                 print('Not converging at iteration {}'.format(iter + 1))
@@ -154,6 +154,8 @@ class TorchSimulator:
         self.Finv = torch.inverse(self.F)        
         self.J = torch.det(self.F)
         self.logJ = torch.log(self.J)
+        C = torch.bmm(torch.transpose(self.F, 1, 2), self.F)
+        self.I1 = torch.diagonal(C, dim1=1, dim2=2).sum(-1) # the trace of C
 
     def compute_forces(self):
         # compute the stress tensors (first Piola-Kirchoff)        
@@ -187,9 +189,7 @@ class TorchSimulator:
 
     def compute_elastic_energy(self):        
         # compute the per element energies
-        C = torch.bmm(torch.transpose(self.F, 1, 2), self.F)
-        I1 = torch.diagonal(C, dim1=1, dim2=2).sum(-1) # the trace of C
-        E = 0.5 * self.mu * (I1 - 3) - self.mu * self.logJ + 0.5 * self.la * self.logJ * self.logJ
+        E = 0.5 * self.mu * (self.I1 - 3) - self.mu * self.logJ + 0.5 * self.la * self.logJ * self.logJ
         elemE = self.vols * E
         return elemE.sum(-1)
 
