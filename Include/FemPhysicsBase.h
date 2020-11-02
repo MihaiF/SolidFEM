@@ -90,7 +90,7 @@ namespace FEM_SYSTEM
 
 		real GetShearModulus() const // or Lame second param
 		{
-			return real(0.5 * mYoungsModulus / (1.0 + mPoissonRatio));
+			return mShearModulus;
 		}
 
 		real GetBulkModulus() const
@@ -101,6 +101,12 @@ namespace FEM_SYSTEM
 		real GetInverseBulkModulus()
 		{
 			return mInvBulkModulus;
+		}
+
+		void SetLameParams(real mu, real lambda)
+		{
+			mLameLambda = lambda;
+			// TODO: update Young and Poisson
 		}
 
 		real GetForceFraction() const { return mForceFraction; }
@@ -120,6 +126,7 @@ namespace FEM_SYSTEM
 		MethodType mMethodType;
 		real mYoungsModulus, mPoissonRatio;
 		real mLameLambda;
+		real mShearModulus;
 		real mInvBulkModulus; // only used for mixed FEM
 		Matrix3R mNormalElasticityMatrix;
 		Vector3R mGravity;

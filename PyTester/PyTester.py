@@ -7,6 +7,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from Simulator import Simulator
 from TorchSimulator import TorchSimulator
 from utils import read_tetfile
+from scipy.optimize import minimize
 
 def plot_nodes(nodes):
     # plot the mesh   
@@ -162,28 +163,43 @@ def test_cantilever_static():
     nodes2 = simC.get_nodes()
     simC.save_to_vtk('cantilever.vtk')
     print(nodes2[-1])
-    #plot_nodes(nodes2)
-
-    target = torch.from_numpy(nodes2).float().to('cpu')
+    plot_nodes(nodes2)
 
     # Python simulator
-    sim = Simulator(verts, indices, fixed2, config)
+    #sim = Simulator(verts, indices, fixed2, config)
     #sim.solve_scipy()
     #sim.solve_conj_grad(400)
-    print(sim.nodes[-1])
+    #print(sim.nodes[-1])
 
     # parameter estimation
-    sim1 = Simulator(verts, indices, fixed2, config)
-    #sim1.nodes = nodes2 # warm start
-    sim1.mu = 1000
-    sim1.la = 10000
-    sim1.estimate_params(nodes2)
-    print(sim1.nodes[-1])
+    mu = 30000;
+    la = 100000;
+    curr_nodes = verts
+    target = nodes2
 
-    # Python torch simulator used for estimation
-    sim2 = TorchSimulator(verts, indices, fixed2, config)
-    sim2.solve_grad_desc(3e-5, 70000, 1e-15, 0.1)
-    print(sim2.nodes[-1])
+    def inverse_objective(x):
+        mu = x[0]
+        la = x[1]
+        print(mu, la)
+        simC = psf.NonlinearFEM(indices, verts, fixed2, config)
+        simC.set_lame_params(mu, la)
+        simC.step() # simulate with current positions and params
+        nodesC = simC.get_nodes()
+        delta = (nodesC - target).flatten()
+        error = np.dot(delta, delta)
+        print('err {:E}'.format(error))
+        return error
+
+    x0 = [mu, la]
+    sol = minimize(inverse_objective, x0, method='Nelder-Mead', bounds=((0, None), (0, None)))
+    print(sol.message)
+    mu = sol.x[0]
+    la = sol.x[1]
+    print(mu, la)      
+
+    # Python torch simulator
+    #sim2 = TorchSimulator(verts, indices, fixed2, config)
+    #sim2.solve_grad_desc(3e-5, 70000, 1e-15, 0.1)
     #print(sim2.nodes[-1])
 
 def test_hammerbot():

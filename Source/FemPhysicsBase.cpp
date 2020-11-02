@@ -37,6 +37,7 @@ namespace FEM_SYSTEM
 			mInvBulkModulus = config.mInvBulkModulus;
 
 		mLameLambda = real(mYoungsModulus * mPoissonRatio / (1.0 + mPoissonRatio) / (1.0 - 2.0 * mPoissonRatio));
+		mShearModulus = 0.5 * mYoungsModulus / (1.0 + mPoissonRatio);
 
 		Printf("bulk modulus: %g\n", GetBulkModulus());
 		Printf("shear modulus: %g\n", GetShearModulus());

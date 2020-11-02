@@ -53,6 +53,7 @@ public:
 	py::array_t<double> GetNodes() const;
 	py::array_t<int> GetTets() const;
 	void SaveToVTK(py::str path);
+	void SetLameParams(real mu, real lambda) { mPhys->SetLameParams(mu, lambda); }
 
 private:
 	FemConfig ParseConfig(py::dict config);
@@ -272,5 +273,6 @@ PYBIND11_MODULE(pysolidfem, m) {
 		.def(py::init<py::str>())
 		.def("step", &PyNonlinearFEM::Step, py::arg("dt") = DT)
 		.def("get_nodes", &PyNonlinearFEM::GetNodes)
-		.def("save_to_vtk", &PyNonlinearFEM::SaveToVTK);
+		.def("save_to_vtk", &PyNonlinearFEM::SaveToVTK)
+		.def("set_lame_params", &PyNonlinearFEM::SetLameParams);
 }
