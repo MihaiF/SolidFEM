@@ -2,11 +2,13 @@ import pysolidfem as psf
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
+import scipy.optimize as opt
 
 from mpl_toolkits.mplot3d import Axes3D
 from Simulator import Simulator
 from TorchSimulator import TorchSimulator
 from utils import read_tetfile
+
 from scipy.optimize import minimize
 
 def plot_nodes(nodes):
@@ -190,6 +192,18 @@ def test_cantilever_static():
         print('err {:E}'.format(error))
         return error
 
+    def residual(x):
+        mu = x[0]
+        la = x[1]
+        print(mu, la)
+        simC = psf.NonlinearFEM(indices, verts, fixed2, config)
+        #simC = psf.NonlinearFEM('cantilever.xml')
+        simC.set_lame_params(mu, la)
+        simC.step() # simulate with current positions and params
+        nodesC = simC.get_nodes()
+        delta = (nodesC - target).flatten()
+        return delta
+
     # plot the loss function w.r.t. mu
     #mu_min = 10000
     #mu_max = 30000
@@ -204,7 +218,7 @@ def test_cantilever_static():
     #ax.plot(mus, loss)
     #fig.savefig("loss.png")
 
-    # plot the loss function w.r.t. la
+    # plot the loss function w.r.t. lambda
     #la_min = 10000
     #la_max = 1000000
     #steps = 100
@@ -221,7 +235,9 @@ def test_cantilever_static():
     mu = 20000;
     la = 10000;
     x0 = [mu, la]
-    sol = minimize(inverse_objective, x0, method='Nelder-Mead', bounds=((0, None), (0, None)))
+    sol = minimize(inverse_objective, x0, method='Nelder-Mead')
+    #sol = opt.least_squares(residual, x0, method='dogbox')
+    #sol = opt.dual_annealing(inverse_objective, bounds=((10000, 30000), (200000, 210000)))
     print(sol.message)
     mu = sol.x[0]
     la = sol.x[1]
@@ -247,12 +263,65 @@ def test_hammerbot():
     nodes = fem.get_nodes()
     fem.save_to_vtk("hammerbot.vtk")
     
+    # parameter estimation
+    target = nodes
+
+    def inverse_objective(x):
+        mu = x[0]
+        la = x[1]
+        print(mu, la)
+        simC = psf.NonlinearFEM('hammerbot.xml')
+        simC.set_lame_params(mu, la)
+        simC.step() # simulate with current positions and params
+        nodesC = simC.get_nodes()
+        delta = (nodesC - target).flatten()
+        error = np.dot(delta, delta)
+        print('err {:E}'.format(error))
+        return error
+
+    mu = 30000;
+    la = 120000;
+    x0 = [mu, la]
+    sol = minimize(inverse_objective, x0, method='Nelder-Mead')
+    print(sol.message)
+    mu = sol.x[0]
+    la = sol.x[1]
+    print(mu, la)      
+
+    # plot the loss function w.r.t. mu
+    #mu_min = 10000
+    #mu_max = 50000
+    #steps = 1000
+    #loss = np.empty(steps, dtype=np.double)
+    #mus = np.empty(steps, dtype=np.double)
+    #for i in range(0, steps):
+    #    mus[i] = mu_min + (mu_max - mu_min) * (i + 1) / steps
+    #    x = [mus[i], fem.get_lame_lambda()]
+    #    loss[i] = inverse_objective(x)
+    #fig, ax = plt.subplots()
+    #ax.plot(mus, loss)
+    #fig.savefig("loss_hb_mu.png")
+
+    # plot the loss function w.r.t. lambda
+    #la_min = 100000
+    #la_max = 200000
+    #steps = 100
+    #loss = np.empty(steps, dtype=np.double)
+    #las = np.empty(steps, dtype=np.double)
+    #for i in range(0, steps):
+    #    las[i] = la_min + (la_max - la_min) * (i + 1) / steps
+    #    x = [fem.get_shear_modulus(), las[i]]
+    #    loss[i] = inverse_objective(x)
+    #fig, ax = plt.subplots()
+    #ax.plot(las, loss)
+    #fig.savefig("loss_hb_lambda.png")
+
     # load the hammerbot
-    verts, indices = read_tetfile('hammerbot_fine.tet')
-    fixed2 = [261, 262, 263, 264, 265, 266, 267, 268, 269, 270, 271, 272, 273, 274, 275, 276, 277, 278, 279, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289, 290, 291, 292, 293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 307, 308, 309, 310, 311, 312, 313, 314, 315, 316, 317, 318, 319, 320, 321, 1308, 1309, 1310, 1311, 1312, 1313, 1322, 1323, 1324, 1325, 1334, 1335, 1336, 1337, 1357, 1436, 1492, 1496, 1523, 1564, 1600, 1602, 1656, 1663, 1682, 1800, 1804, 1894, 2168, 2240, 2260]
-    sim2 = TorchSimulator(0.01 * verts, indices, fixed2, config, 'cuda')
-    sim2.solve_grad_desc(2e-4, 70000, 1e-15, 0.1)
-    plot_nodes(sim2.nodes)
+    #verts, indices = read_tetfile('hammerbot_fine.tet')
+    #fixed2 = [261, 262, 263, 264, 265, 266, 267, 268, 269, 270, 271, 272, 273, 274, 275, 276, 277, 278, 279, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289, 290, 291, 292, 293, 294, 295, 296, 297, 298, 299, 300, 301, 302, 303, 304, 305, 306, 307, 308, 309, 310, 311, 312, 313, 314, 315, 316, 317, 318, 319, 320, 321, 1308, 1309, 1310, 1311, 1312, 1313, 1322, 1323, 1324, 1325, 1334, 1335, 1336, 1337, 1357, 1436, 1492, 1496, 1523, 1564, 1600, 1602, 1656, 1663, 1682, 1800, 1804, 1894, 2168, 2240, 2260]
+    #sim2 = TorchSimulator(0.01 * verts, indices, fixed2, config, 'cuda')
+    #sim2.solve_grad_desc(2e-4, 70000, 1e-15, 0.1)
+    #plot_nodes(sim2.nodes)
 
     #N, T, F = psf.load_from_xml('hammerbot.xml')
     #print(N)

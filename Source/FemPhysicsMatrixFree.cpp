@@ -873,7 +873,7 @@ namespace FEM_SYSTEM
 		{
 			K += mDirichletStiffness * mDirichletJacobian.transpose() * mDirichletJacobian;
 		}
-		if (mConfig.mOptimizer)
+		//if (mConfig.mOptimizer)
 			Printf("energy: %g\n", ComputeEnergy());
 	}
 

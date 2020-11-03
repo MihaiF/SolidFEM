@@ -33,6 +33,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <pybind11/pybind11.h>
 //TODO: use a relative path for the include dir
 #include <Include/FemPhysicsMatrixFree.h>
+#include <Include/FemPhysicsMixed.h>
 #include <Include/FemIO.h>
 #include <pybind11/iostream.h>
 #include <pybind11/numpy.h>
@@ -54,13 +55,17 @@ public:
 	py::array_t<int> GetTets() const;
 	void SaveToVTK(py::str path);
 	void SetLameParams(real mu, real lambda) { mPhys->SetLameParams(mu, lambda); }
+	real GetShearModulus() const { return mPhys->GetShearModulus(); }
+	real GetLameLambda() const { return mPhys->GetLameFirstParam(); }
 
 private:
 	FemConfig ParseConfig(py::dict config);
 
 private:
-	std::unique_ptr<FemPhysicsMatrixFree> mPhys;
+	std::unique_ptr<FemPhysicsBase> mPhys;
 	FemPhysicsMatrixFree::Config mNonlinConfig;
+	FemPhysicsMixed::Config mMixedConfig;
+	bool mUseMixed = true;
 };
 
 PyNonlinearFEM::PyNonlinearFEM(py::array_t<int> tets, py::array_t<double> nodes, py::array_t<int> fixed_nodes, py::dict config)
@@ -135,7 +140,10 @@ PyNonlinearFEM::PyNonlinearFEM(py::array_t<int> tets, py::array_t<double> nodes,
 	}
 
 	// create the FEM object
-	mPhys.reset(new FemPhysicsMatrixFree(nTets, nNodes, ParseConfig(config)));
+	if (mUseMixed)
+		mPhys.reset(new FemPhysicsMixed(nTets, nNodes, ParseConfig(config)));
+	else
+		mPhys.reset(new FemPhysicsMatrixFree(nTets, nNodes, ParseConfig(config)));
 }
 
 PyNonlinearFEM::PyNonlinearFEM(py::str path)
@@ -180,11 +188,21 @@ PyNonlinearFEM::PyNonlinearFEM(py::str path)
 	}
 
 	// create the FEM object
-	config.mMaterial = (MaterialModelType)MMT_NEO_HOOKEAN;
-	mNonlinConfig.mSolver = NST_NEWTON_LS;
-	mNonlinConfig.mOptimizer = true;
-	config.mCustomConfig = &mNonlinConfig;
-	mPhys.reset(new FemPhysicsMatrixFree(tets, nodes, config));
+	if (!mUseMixed)
+	{
+		config.mMaterial = (MaterialModelType)MMT_NEO_HOOKEAN;
+		mNonlinConfig.mSolver = NST_NEWTON_LS;
+		mNonlinConfig.mOptimizer = true;
+		config.mCustomConfig = &mNonlinConfig;
+		mPhys.reset(new FemPhysicsMatrixFree(tets, nodes, config));
+	}
+	else
+	{
+		config.mMaterial = (MaterialModelType)MMT_DISTORTIONAL_OGDEN;
+		mMixedConfig.mSolver = NST_NEWTON_LS;
+		config.mCustomConfig = &mMixedConfig;
+		mPhys.reset(new FemPhysicsMixed(tets, nodes, config));
+	}
 }
 
 py::array_t<double> PyNonlinearFEM::GetNodes() const
@@ -255,10 +273,19 @@ FEM_SYSTEM::FemConfig PyNonlinearFEM::ParseConfig(py::dict config)
 	{
 		nConfig.mAbsNewtonRsidualThreshold = py::cast<real>(config["tol"]);
 	}
-	nConfig.mMaterial = (MaterialModelType)MMT_NEO_HOOKEAN;
-	mNonlinConfig.mSolver = NST_NEWTON_LS;
-	mNonlinConfig.mOptimizer = true;
-	nConfig.mCustomConfig = &mNonlinConfig;
+	if (!mUseMixed)
+	{
+		nConfig.mMaterial = (MaterialModelType)MMT_NEO_HOOKEAN;
+		mNonlinConfig.mSolver = NST_NEWTON_LS;
+		mNonlinConfig.mOptimizer = true;
+		nConfig.mCustomConfig = &mNonlinConfig;
+	}
+	else
+	{
+		nConfig.mMaterial = (MaterialModelType)MMT_DISTORTIONAL_OGDEN;
+		mMixedConfig.mSolver = NST_NEWTON_LS;
+		nConfig.mCustomConfig = &mMixedConfig;
+	}
 	return nConfig;
 }
 
@@ -314,5 +341,7 @@ PYBIND11_MODULE(pysolidfem, m) {
 		.def("step", &PyNonlinearFEM::Step, py::arg("dt") = DT)
 		.def("get_nodes", &PyNonlinearFEM::GetNodes)
 		.def("save_to_vtk", &PyNonlinearFEM::SaveToVTK)
-		.def("set_lame_params", &PyNonlinearFEM::SetLameParams);
+		.def("set_lame_params", &PyNonlinearFEM::SetLameParams)
+		.def("get_shear_modulus", &PyNonlinearFEM::GetShearModulus)
+		.def("get_lame_lambda", &PyNonlinearFEM::GetLameLambda);
 }

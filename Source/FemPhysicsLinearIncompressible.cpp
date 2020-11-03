@@ -87,6 +87,8 @@ namespace FEM_SYSTEM
 			EigenMatrix denseMK = EigenMatrix(mMassMatrix) + h * h * mDeviatoricStiffnessMatrix;
 			mInverseImplicitMatrix = denseMK.inverse();
 		}
+
+		mPressures.resize(mNumPressureNodes);
 	}
 
 	// main stepping function

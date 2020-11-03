@@ -55,7 +55,10 @@ namespace FEM_SYSTEM
 			if (mForceFraction == 0)
 			{
 				mForceFraction = 1;
-				SolveSaddlePoint();
+				if (mConfig.mSolver == NST_MIXED_NEWTON || mConfig.mSolver == NST_NEWTON)
+					SolveSaddlePoint();
+				else if (mConfig.mSolver == NST_NEWTON_LS)
+					SolveSaddlePointLS();
 			}
 		}
 		else if (mSimType == ST_QUASI_STATIC)
