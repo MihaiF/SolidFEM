@@ -191,27 +191,41 @@ def test_cantilever_static():
         return error
 
     # plot the loss function w.r.t. mu
-    mu_min = 10000
-    mu_max = 30000
-    steps = 1000
-    loss = np.empty(steps, dtype=np.double)
-    mus = np.empty(steps, dtype=np.double)
-    for i in range(0, steps):
-        mus[i] = mu_min + (mu_max - mu_min) * (i + 1) / steps
-        x = [mus[i], sim.la]
-        loss[i] = inverse_objective(x)
-    fig, ax = plt.subplots()
-    ax.plot(mus, loss)
-    fig.savefig("loss.png")
+    #mu_min = 10000
+    #mu_max = 30000
+    #steps = 1000
+    #loss = np.empty(steps, dtype=np.double)
+    #mus = np.empty(steps, dtype=np.double)
+    #for i in range(0, steps):
+    #    mus[i] = mu_min + (mu_max - mu_min) * (i + 1) / steps
+    #    x = [mus[i], sim.la]
+    #    loss[i] = inverse_objective(x)
+    #fig, ax = plt.subplots()
+    #ax.plot(mus, loss)
+    #fig.savefig("loss.png")
 
-    #mu = 30000;
-    #la = sim.la;
-    #x0 = [mu, la]
-    #sol = minimize(inverse_objective, x0, method='Nelder-Mead', bounds=((0, None), (0, None)))
-    #print(sol.message)
-    #mu = sol.x[0]
-    #la = sol.x[1]
-    #print(mu, la)      
+    # plot the loss function w.r.t. la
+    #la_min = 10000
+    #la_max = 1000000
+    #steps = 100
+    #loss = np.empty(steps, dtype=np.double)
+    #las = np.empty(steps, dtype=np.double)
+    #for i in range(0, steps):
+    #    las[i] = la_min + (la_max - la_min) * (i + 1) / steps
+    #    x = [sim.mu, las[i]]
+    #    loss[i] = inverse_objective(x)
+    #fig, ax = plt.subplots()
+    #ax.plot(las, loss)
+    #fig.savefig("loss_lambda.png")
+
+    mu = 20000;
+    la = 10000;
+    x0 = [mu, la]
+    sol = minimize(inverse_objective, x0, method='Nelder-Mead', bounds=((0, None), (0, None)))
+    print(sol.message)
+    mu = sol.x[0]
+    la = sol.x[1]
+    print(mu, la)      
 
     # Python torch simulator
     #sim2 = TorchSimulator(verts, indices, fixed2, config)
