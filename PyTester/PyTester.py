@@ -149,6 +149,7 @@ def test_cantilever_static():
         "simtype": 0,
         "substeps": 10,
         'maxiter': 100,
+        'tol': 0.01
     }
 
     # load the box
@@ -156,8 +157,15 @@ def test_cantilever_static():
     fixed2 = [0, 1, 2, 3, 4, 5, 6, 7, 8]
     num_steps = 10
 
+    # Python simulator
+    sim = Simulator(verts, indices, fixed2, config)
+    #sim.solve_scipy()
+    #sim.solve_conj_grad(400)
+    #print(sim.nodes[-1])
+
     # C++ simulator
     simC = psf.NonlinearFEM(indices, verts, fixed2, config)
+    #simC = psf.NonlinearFEM('cantilever.xml')
     nodes2 = simC.get_nodes()
     simC.step()
     nodes2 = simC.get_nodes()
@@ -165,16 +173,7 @@ def test_cantilever_static():
     print(nodes2[-1])
     plot_nodes(nodes2)
 
-    # Python simulator
-    #sim = Simulator(verts, indices, fixed2, config)
-    #sim.solve_scipy()
-    #sim.solve_conj_grad(400)
-    #print(sim.nodes[-1])
-
     # parameter estimation
-    mu = 30000;
-    la = 100000;
-    curr_nodes = verts
     target = nodes2
 
     def inverse_objective(x):
@@ -182,6 +181,7 @@ def test_cantilever_static():
         la = x[1]
         print(mu, la)
         simC = psf.NonlinearFEM(indices, verts, fixed2, config)
+        #simC = psf.NonlinearFEM('cantilever.xml')
         simC.set_lame_params(mu, la)
         simC.step() # simulate with current positions and params
         nodesC = simC.get_nodes()
@@ -190,12 +190,28 @@ def test_cantilever_static():
         print('err {:E}'.format(error))
         return error
 
-    x0 = [mu, la]
-    sol = minimize(inverse_objective, x0, method='Nelder-Mead', bounds=((0, None), (0, None)))
-    print(sol.message)
-    mu = sol.x[0]
-    la = sol.x[1]
-    print(mu, la)      
+    # plot the loss function w.r.t. mu
+    mu_min = 10000
+    mu_max = 30000
+    steps = 1000
+    loss = np.empty(steps, dtype=np.double)
+    mus = np.empty(steps, dtype=np.double)
+    for i in range(0, steps):
+        mus[i] = mu_min + (mu_max - mu_min) * (i + 1) / steps
+        x = [mus[i], sim.la]
+        loss[i] = inverse_objective(x)
+    fig, ax = plt.subplots()
+    ax.plot(mus, loss)
+    fig.savefig("loss.png")
+
+    #mu = 30000;
+    #la = sim.la;
+    #x0 = [mu, la]
+    #sol = minimize(inverse_objective, x0, method='Nelder-Mead', bounds=((0, None), (0, None)))
+    #print(sol.message)
+    #mu = sol.x[0]
+    #la = sol.x[1]
+    #print(mu, la)      
 
     # Python torch simulator
     #sim2 = TorchSimulator(verts, indices, fixed2, config)

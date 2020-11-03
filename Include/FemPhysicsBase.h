@@ -106,6 +106,7 @@ namespace FEM_SYSTEM
 		void SetLameParams(real mu, real lambda)
 		{
 			mLameLambda = lambda;
+			mShearModulus = mu;
 			// TODO: update Young and Poisson
 		}
 

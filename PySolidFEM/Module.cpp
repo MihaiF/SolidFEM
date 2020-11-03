@@ -115,6 +115,25 @@ PyNonlinearFEM::PyNonlinearFEM(py::array_t<int> tets, py::array_t<double> nodes,
 		nNodes[idx].invMass = 0;
 	}
 
+	for (size_t i = 0; i < nTets.size(); i++)
+	{
+		Tet& tet = nTets.at(i);
+		const Vector3R& x0 = nNodes.at(tet.idx[0]).pos0;
+		const Vector3R& x1 = nNodes.at(tet.idx[1]).pos0;
+		const Vector3R& x2 = nNodes.at(tet.idx[2]).pos0;
+		const Vector3R& x3 = nNodes.at(tet.idx[3]).pos0;
+		Vector3R d1 = x1 - x0;
+		Vector3R d2 = x2 - x0;
+		Vector3R d3 = x3 - x0;
+		Matrix3R mat(d1, d2, d3); // this is the reference shape matrix Dm [Sifakis][Teran03]
+		real vol = (mat.Determinant()) / 6.f; // signed volume of the tet
+		if (vol < 0)
+		{
+			// swap the first two indices so that the volume is positive next time
+			std::swap(tet.idx[0], tet.idx[1]);
+		}
+	}
+
 	// create the FEM object
 	mPhys.reset(new FemPhysicsMatrixFree(nTets, nNodes, ParseConfig(config)));
 }
@@ -140,6 +159,24 @@ PyNonlinearFEM::PyNonlinearFEM(py::str path)
 	{
 		int idx = fixedNodes[i];
 		nodes[idx].invMass = 0.f;
+	}
+	for (size_t i = 0; i < tets.size(); i++)
+	{
+		Tet& tet = tets.at(i);
+		const Vector3R& x0 = nodes.at(tet.idx[0]).pos0;
+		const Vector3R& x1 = nodes.at(tet.idx[1]).pos0;
+		const Vector3R& x2 = nodes.at(tet.idx[2]).pos0;
+		const Vector3R& x3 = nodes.at(tet.idx[3]).pos0;
+		Vector3R d1 = x1 - x0;
+		Vector3R d2 = x2 - x0;
+		Vector3R d3 = x3 - x0;
+		Matrix3R mat(d1, d2, d3); // this is the reference shape matrix Dm [Sifakis][Teran03]
+		real vol = (mat.Determinant()) / 6.f; // signed volume of the tet
+		if (vol < 0)
+		{
+			// swap the first two indices so that the volume is positive next time
+			std::swap(tet.idx[0], tet.idx[1]);
+		}
 	}
 
 	// create the FEM object
@@ -214,8 +251,11 @@ FEM_SYSTEM::FemConfig PyNonlinearFEM::ParseConfig(py::dict config)
 	{
 		nConfig.mOuterIterations = py::cast<int>(config["maxiter"]);
 	}
+	if (config.contains("tol"))
+	{
+		nConfig.mAbsNewtonRsidualThreshold = py::cast<real>(config["tol"]);
+	}
 	nConfig.mMaterial = (MaterialModelType)MMT_NEO_HOOKEAN;
-	nConfig.mAbsNewtonRsidualThreshold = 1e-17;
 	mNonlinConfig.mSolver = NST_NEWTON_LS;
 	mNonlinConfig.mOptimizer = true;
 	nConfig.mCustomConfig = &mNonlinConfig;

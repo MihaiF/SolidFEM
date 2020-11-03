@@ -563,7 +563,8 @@ namespace FEM_SYSTEM
 					counter++;
 					word = ptr + 1;
 				}
-				indx[3] = atoi(word);
+				if (counter < 4)
+					indx[3] = atoi(word);
 
 				Tet tet;
 				tet.idx[0] = indx[0];

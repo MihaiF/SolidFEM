@@ -1,0 +1,8 @@
+<solidfem>
+	<model path="box2.tet" type="tet1">
+		<dirichlet>0 1 2 3 4 5 6 7 8</dirichlet>
+	</model>
+	<material name="neo-hookean" young="66000" poisson="0.45" density="1070"/>
+	<simulation type="quasi-static" steps="1" method="nonlinear" gravity="-9.8"/>
+	<solver method="newton" iterations="100" tolerance="0.1"/>
+</solidfem>

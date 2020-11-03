@@ -116,6 +116,24 @@ int main(int argc, char* argv[], char* envp[])
 	{
 		nodes[i].pos0 = nodes[i].pos;
 	}
+	for (size_t i = 0; i < tets.size(); i++)
+	{
+		Tet& tet = tets.at(i);
+		const Vector3R& x0 = nodes.at(tet.idx[0]).pos0;
+		const Vector3R& x1 = nodes.at(tet.idx[1]).pos0;
+		const Vector3R& x2 = nodes.at(tet.idx[2]).pos0;
+		const Vector3R& x3 = nodes.at(tet.idx[3]).pos0;
+		Vector3R d1 = x1 - x0;
+		Vector3R d2 = x2 - x0;
+		Vector3R d3 = x3 - x0;
+		Matrix3R mat(d1, d2, d3); // this is the reference shape matrix Dm [Sifakis][Teran03]
+		real vol = (mat.Determinant()) / 6.f; // signed volume of the tet
+		if (vol < 0)
+		{
+			// swap the first two indices so that the volume is positive next time
+			std::swap(tet.idx[0], tet.idx[1]);
+		}
+	}
 
 	// override or set properties from the command line
 	std::string suffix;
@@ -202,11 +220,12 @@ int main(int argc, char* argv[], char* envp[])
 
 	Printf("Constructing simulator...\n");
 	FemPhysicsBase* femPhysics = nullptr;
+	FemPhysicsMatrixFree::Config nonlinConfig;
+	FemPhysicsMixed::Config mixedConfig;
 	if (femConfig.mType == MT_NONLINEAR_ELASTICITY)
 	{
 		femConfig.mMaterial = (MaterialModelType)MMT_NEO_HOOKEAN;
 
-		FemPhysicsMatrixFree::Config nonlinConfig;
 		nonlinConfig.mSolver = noLineSearch ? NST_NEWTON : NST_NEWTON_LS;
 		nonlinConfig.mOptimizer = optimizer;
 		femConfig.mCustomConfig = &nonlinConfig;
@@ -218,7 +237,6 @@ int main(int argc, char* argv[], char* envp[])
 		femConfig.mMaterial = (MaterialModelType)MMT_DISTORTIONAL_OGDEN;
 		//femConfig.mInvBulkModulus = 0;
 		//femConfig.mPoissonRatio = 0.45;
-		FemPhysicsMixed::Config mixedConfig;
 		mixedConfig.mSolver = noLineSearch ? NST_NEWTON : NST_NEWTON_LS;
 		mixedConfig.mConstraintScale = 1;
 		//mixedConfig.mPressureOrder = 0;
