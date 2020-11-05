@@ -153,5 +153,14 @@ namespace FEM_SYSTEM
 		}
 	}
 
+	void FemPhysicsBase::GetForceParamGrads(EigenVector& gradMu, EigenVector& gradLambda)
+	{
+		std::vector<Vector3R> fmu;
+		std::vector<Vector3R> flambda;
+		ElasticEnergy::ComputeForceParamGrads(this, fmu, flambda);
+
+		gradMu = GetEigenVector(fmu, mNumBCs);
+		gradLambda = GetEigenVector(flambda, mNumBCs);
+	}
 
 }

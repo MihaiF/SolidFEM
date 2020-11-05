@@ -897,7 +897,7 @@ namespace FEM_SYSTEM
 	{
 		AssembleDynamicContributions();
 		
-		NewtonSolverBackTrack<FemPhysicsMatrixFree, EigenMatrix> solver;
+		NewtonSolverBackTrack<FemPhysicsMatrixFree, SparseMatrix> solver;
 		solver.mNumIterations = mOuterIterations;
 		solver.mVerbose = mVerbose ? VL_MINIMUM : VL_NONE;
 		solver.mResidualThreshold = mAbsNewtonResidualThreshold;
@@ -936,6 +936,9 @@ namespace FEM_SYSTEM
 		}
 
 		CheckForInversion(true);
+
+		// store Hessian
+		mHessian = solver.mB;
 
 		return true;
 	}

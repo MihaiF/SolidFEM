@@ -34,6 +34,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define FEM_PHYSICS_BASE_H
 #include "FemDataStructures.h"
 #include "FemCollisions.h"
+#include "ElasticEnergy.h"
 #include <Engine/Utils.h>
 
 namespace FEM_SYSTEM
@@ -123,6 +124,10 @@ namespace FEM_SYSTEM
 
 		FemCollision* GetCollision() { return mFemCollision; }
 
+		SparseMatrix GetHessian() const { return mHessian; }
+
+		void GetForceParamGrads(EigenVector& gradMu, EigenVector& gradLambda);
+
 	protected:
 		void AssembleDynamicContributions();
 
@@ -175,6 +180,8 @@ namespace FEM_SYSTEM
 		SparseMatrix mDirichletJacobian;
 
 		real mTotalInitialVol;
+
+		SparseMatrix mHessian;
 	};
 
 	inline void FemPhysicsBase::AddDirichletBC(uint32 i, uint32 axes)

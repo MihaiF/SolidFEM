@@ -120,7 +120,7 @@ namespace FEM_SYSTEM
 		}
 		return totalEnergy;
 	}
-	Matrix3R ElasticEnergy::ComputeElementStress(const FemPhysicsBase* femPhysics, uint32 e, int material)
+	Matrix3R ElasticEnergy::ComputeElementStress(const FemPhysicsBase* femPhysics, uint32 e, Matrix3R& Pmu, Matrix3R& Plambda, int material)
 	{
 		Matrix3R id;
 		const real mu = femPhysics->GetShearModulus();
@@ -176,7 +176,9 @@ namespace FEM_SYSTEM
 			real J = F.Determinant();
 			//if (J < 0)
 			//	Printf("negative jacobian :)\n");
-			piolae = mu * (F - Finvtr) + lambda * log(J) * Finvtr;
+			Pmu = F - Finvtr;
+			Plambda = log(J) * Finvtr;
+			piolae = mu * Pmu + lambda * Plambda;
 		}
 		else if (material == MMT_DISTORTIONAL_NH7)
 		{
@@ -254,7 +256,8 @@ namespace FEM_SYSTEM
 		//#pragma omp parallel for
 		for (int e = 0; e < (int)femPhysics->GetNumElements(); e++)
 		{
-			auto piolae = ComputeElementStress(femPhysics, e, material);
+			Matrix3R Pmu, Plambda;
+			auto piolae = ComputeElementStress(femPhysics, e, Pmu, Plambda, material);
 			Matrix3R forces = -femPhysics->GetElementInitialVolume(e) * piolae * femPhysics->GetBarycentricJacobianMatrix(e); // material description as the volume is the undeformed one
 			uint32 i[4];
 			i[0] = femPhysics->GetGlobalIndex(e, 0);
@@ -269,7 +272,63 @@ namespace FEM_SYSTEM
 				fout[i[0]] -= f;
 			}
 		}
+	}
 
+	void ElasticEnergy::ComputeForceParamGrads(const FemPhysicsBase* femPhysics, std::vector<Vector3R>& fmu, std::vector<Vector3R>& flambda, int material)
+	{
+		fmu.resize(femPhysics->GetNumNodes());
+		flambda.resize(femPhysics->GetNumNodes());
+		for (int e = 0; e < (int)femPhysics->GetNumElements(); e++)
+		{
+			Matrix3R Pmu, Plambda;
+			auto piolae = ComputeElementStress(femPhysics, e, Pmu, Plambda, material);
+			
+			uint32 i[4];
+			i[0] = femPhysics->GetGlobalIndex(e, 0);
+			i[1] = femPhysics->GetGlobalIndex(e, 1);
+			i[2] = femPhysics->GetGlobalIndex(e, 2);
+			i[3] = femPhysics->GetGlobalIndex(e, 3);
+
+			Matrix3R forcesMu = -femPhysics->GetElementInitialVolume(e) * Pmu * femPhysics->GetBarycentricJacobianMatrix(e);
+			for (int j = 1; j < 4; j++)
+			{
+				Vector3R f = forcesMu(j - 1); // the j-1 column of 'forces'
+				fmu[i[j]] += f;
+				fmu[i[0]] -= f;
+			}
+
+			Matrix3R forcesLambda = -femPhysics->GetElementInitialVolume(e) * Plambda * femPhysics->GetBarycentricJacobianMatrix(e);
+			for (int j = 1; j < 4; j++)
+			{
+				Vector3R f = forcesLambda(j - 1); // the j-1 column of 'forces'
+				flambda[i[j]] += f;
+				flambda[i[0]] -= f;
+			}
+		}
+	}
+
+	void ElasticEnergy::ComputeForceParamGradsFD(FemPhysicsBase* femPhysics, std::vector<Vector3R>& fmu, std::vector<Vector3R>& flambda, int material)
+	{
+		uint32 numNodes = femPhysics->GetNumNodes();
+		fmu.resize(numNodes);
+		flambda.resize(numNodes);
+		std::vector<Vector3R> f0(numNodes);
+		ComputeForces(femPhysics, f0);
+		real mu0 = femPhysics->GetShearModulus();
+		real lambda0 = femPhysics->GetLameFirstParam();
+		real eps = 1e-5;
+		real invEps = 1.0 / eps;
+		femPhysics->SetLameParams(mu0 + eps, lambda0);
+		std::vector<Vector3R> f1(numNodes);
+		ComputeForces(femPhysics, f1);
+		for (uint32 i = 0; i < numNodes; i++)
+			fmu[i] = invEps * (f1[i] - f0[i]);
+		femPhysics->SetLameParams(mu0, lambda0 + eps);
+		std::vector<Vector3R> f2(numNodes);
+		ComputeForces(femPhysics, f2);
+		for (uint32 i = 0; i < numNodes; i++)
+			flambda[i] = invEps * (f2[i] - f0[i]);
+		femPhysics->SetLameParams(mu0, lambda0);
 	}
 
 	void ElasticEnergy::ComputeLocalForceDifferential(const FemPhysicsBase* femPhysics, uint32 e, const Vector3R dx[4], Vector3R df[4])

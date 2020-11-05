@@ -339,7 +339,8 @@ namespace FEM_SYSTEM
 		outfile << "TENSORS stress float" << std::endl;
 		for (uint32 i = 0; i < femPhysics->GetNumElements(); i++)
 		{
-			auto P = ElasticEnergy::ComputeElementStress(femPhysics, i);
+			Matrix3R P1, P2;
+			auto P = ElasticEnergy::ComputeElementStress(femPhysics, i, P1, P2);
 			outfile << P(0, 0) << " " << P(0, 1) << " " << P(0, 2) << std::endl;
 			outfile << P(1, 0) << " " << P(1, 1) << " " << P(1, 2) << std::endl;
 			outfile << P(2, 0) << " " << P(2, 1) << " " << P(2, 2) << std::endl;

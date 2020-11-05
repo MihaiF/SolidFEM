@@ -115,7 +115,7 @@ def test_cantilever():
     }
 
     # load the box
-    verts, indices = read_tetfile('box2.tet')
+    verts, indices = read_tetfile('../Models/box2.tet')
     fixed2 = [0, 1, 2, 3, 4, 5, 6, 7, 8]
     num_steps = 10
 
@@ -152,11 +152,11 @@ def test_cantilever_static():
         "substeps": 10,
         'maxiter': 100,
         'tol': 0.01,
-        'mixed': True,
+        'mixed': False,
     }
 
     # load the box
-    verts, indices = read_tetfile('box2.tet')
+    verts, indices = read_tetfile('../Models/box2.tet')
     fixed2 = [0, 1, 2, 3, 4, 5, 6, 7, 8]
     num_steps = 10
 
@@ -182,18 +182,41 @@ def test_cantilever_static():
     def inverse_objective(x):
         mu = x[0]
         la = x[1]
-        print(mu, la)
+        print("loss: ", mu, la)
         config["young"] = mu * (3.0 * la + 2.0 * mu) / (mu + la)
         config["poisson"] = 0.5 * la / (la + mu)
         simC = psf.NonlinearFEM(indices, verts, fixed2, config)
-        #simC = psf.NonlinearFEM('cantilever.xml')
-        #simC.set_lame_params(mu, la)
+        simC.step()
+        nodesC = simC.get_nodes()
+        delta = (nodesC - target).flatten()
+        error = 0.5 * np.dot(delta, delta)
+        return error
+
+    # TODO: avoid another simulator pass
+    def jacobian(x):
+        mu = x[0]
+        la = x[1]
+        print("jac: ", mu, la)
+        config["young"] = mu * (3.0 * la + 2.0 * mu) / (mu + la)
+        config["poisson"] = 0.5 * la / (la + mu)
+        simC = psf.NonlinearFEM(indices, verts, fixed2, config)
         simC.step() # simulate with current positions and params
         nodesC = simC.get_nodes()
         delta = (nodesC - target).flatten()
-        error = np.dot(delta, delta)
-        print('err {:E}'.format(error))
-        return error
+        H = simC.get_hessian()
+        simC.compute_force_param_grads()
+        f_mu = simC.get_force_mu_grad()
+        f_lambda = simC.get_force_lambda_grad()
+        # TODO: linear solver
+        #Hinv = np.linalg.inv(H)
+        #x_mu = np.matmul(Hinv, f_mu)
+        #x_lambda = np.matmul(Hinv, f_lambda)
+        #jacobian = np.empty(2)
+        #jacobian[0] = np.dot(x_mu, delta[9 * 3:])
+        #jacobian[1] = np.dot(x_lambda, delta[9 * 3:])
+        grad = np.linalg.solve(H, np.column_stack((f_mu, f_lambda)))
+        J = np.matmul(np.transpose(grad), delta[9 * 3:])
+        return J
 
     def residual(x):
         mu = x[0]
@@ -240,10 +263,11 @@ def test_cantilever_static():
     mu = 20000;
     la = 200000;
     x0 = [mu, la]
-    sol = minimize(inverse_objective, x0, method='Nelder-Mead')
+    #sol = minimize(inverse_objective, x0, method='Nelder-Mead')
+    sol = minimize(inverse_objective, x0, method="BFGS", jac=jacobian, options={'gtol': 1e-12})
     #sol = opt.least_squares(residual, x0, method='dogbox')
     #sol = opt.dual_annealing(inverse_objective, bounds=((10000, 30000), (200000, 210000)))
-    print(sol.message)
+    print(sol)
     mu = sol.x[0]
     la = sol.x[1]
     print(mu, la)      
@@ -263,10 +287,10 @@ def test_hammerbot():
     }
 
     # create the simulator from file
-    fem = psf.NonlinearFEM('hammerbot.xml')
+    fem = psf.NonlinearFEM('../Models/hammerbot.xml')
     fem.step()
     nodes = fem.get_nodes()
-    fem.save_to_vtk("hammerbot.vtk")
+    fem.save_to_vtk("../Models/hammerbot.vtk")
     
     # parameter estimation
     target = nodes
