@@ -65,7 +65,7 @@ private:
 	std::unique_ptr<FemPhysicsBase> mPhys;
 	FemPhysicsMatrixFree::Config mNonlinConfig;
 	FemPhysicsMixed::Config mMixedConfig;
-	bool mUseMixed = true;
+	bool mUseMixed = false;
 };
 
 PyNonlinearFEM::PyNonlinearFEM(py::array_t<int> tets, py::array_t<double> nodes, py::array_t<int> fixed_nodes, py::dict config)
@@ -140,10 +140,11 @@ PyNonlinearFEM::PyNonlinearFEM(py::array_t<int> tets, py::array_t<double> nodes,
 	}
 
 	// create the FEM object
+	FemConfig nConfig = ParseConfig(config);
 	if (mUseMixed)
-		mPhys.reset(new FemPhysicsMixed(nTets, nNodes, ParseConfig(config)));
+		mPhys.reset(new FemPhysicsMixed(nTets, nNodes, nConfig));
 	else
-		mPhys.reset(new FemPhysicsMatrixFree(nTets, nNodes, ParseConfig(config)));
+		mPhys.reset(new FemPhysicsMatrixFree(nTets, nNodes, nConfig));
 }
 
 PyNonlinearFEM::PyNonlinearFEM(py::str path)
@@ -272,6 +273,10 @@ FEM_SYSTEM::FemConfig PyNonlinearFEM::ParseConfig(py::dict config)
 	if (config.contains("tol"))
 	{
 		nConfig.mAbsNewtonRsidualThreshold = py::cast<real>(config["tol"]);
+	}
+	if (config.contains("mixed"))
+	{
+		mUseMixed = py::cast<bool>(config["mixed"]);
 	}
 	if (!mUseMixed)
 	{

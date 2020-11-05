@@ -151,7 +151,8 @@ def test_cantilever_static():
         "simtype": 0,
         "substeps": 10,
         'maxiter': 100,
-        'tol': 0.01
+        'tol': 0.01,
+        'mixed': True,
     }
 
     # load the box
@@ -182,9 +183,11 @@ def test_cantilever_static():
         mu = x[0]
         la = x[1]
         print(mu, la)
+        config["young"] = mu * (3.0 * la + 2.0 * mu) / (mu + la)
+        config["poisson"] = 0.5 * la / (la + mu)
         simC = psf.NonlinearFEM(indices, verts, fixed2, config)
         #simC = psf.NonlinearFEM('cantilever.xml')
-        simC.set_lame_params(mu, la)
+        #simC.set_lame_params(mu, la)
         simC.step() # simulate with current positions and params
         nodesC = simC.get_nodes()
         delta = (nodesC - target).flatten()
@@ -196,9 +199,11 @@ def test_cantilever_static():
         mu = x[0]
         la = x[1]
         print(mu, la)
+        config["young"] = mu * (3.0 * la + 2.0 * mu) / (mu + la)
+        config["poisson"] = 0.5 * la / (la + mu)
         simC = psf.NonlinearFEM(indices, verts, fixed2, config)
         #simC = psf.NonlinearFEM('cantilever.xml')
-        simC.set_lame_params(mu, la)
+        #simC.set_lame_params(mu, la)
         simC.step() # simulate with current positions and params
         nodesC = simC.get_nodes()
         delta = (nodesC - target).flatten()
@@ -219,9 +224,9 @@ def test_cantilever_static():
     #fig.savefig("loss.png")
 
     # plot the loss function w.r.t. lambda
-    #la_min = 10000
-    #la_max = 1000000
-    #steps = 100
+    #la_min = 100000
+    #la_max = 300000
+    #steps = 5
     #loss = np.empty(steps, dtype=np.double)
     #las = np.empty(steps, dtype=np.double)
     #for i in range(0, steps):
@@ -233,7 +238,7 @@ def test_cantilever_static():
     #fig.savefig("loss_lambda.png")
 
     mu = 20000;
-    la = 10000;
+    la = 200000;
     x0 = [mu, la]
     sol = minimize(inverse_objective, x0, method='Nelder-Mead')
     #sol = opt.least_squares(residual, x0, method='dogbox')

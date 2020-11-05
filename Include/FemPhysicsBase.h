@@ -103,11 +103,14 @@ namespace FEM_SYSTEM
 			return mInvBulkModulus;
 		}
 
-		void SetLameParams(real mu, real lambda)
+		virtual void SetLameParams(real mu, real lambda)
 		{
 			mLameLambda = lambda;
 			mShearModulus = mu;
-			// TODO: update Young and Poisson
+			mYoungsModulus = mu * (3 * lambda + 2 * mu) / (mu + lambda);
+			mPoissonRatio = 0.5 * lambda / (mu + lambda);
+			real bulk = lambda + 2 * mu / 3;
+			mInvBulkModulus = 1 / bulk;
 		}
 
 		real GetForceFraction() const { return mForceFraction; }

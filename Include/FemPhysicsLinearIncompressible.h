@@ -70,6 +70,12 @@ namespace FEM_SYSTEM
 		uint32 GetNumFreePressureNodes() const { return mNumPressureNodes - mNumFixedP; }
 		uint32 GetPressureGlobalIndex(uint32 eidx, uint32 lidx) const { return mPressureOrder == 0 ? eidx : mPressureMesh->GetGlobalIndex(eidx, lidx); }
 
+		void SetLameParams(real mu, real lambda) override
+		{
+			FemPhysicsBase::SetLameParams(mu, lambda);
+			AssembleComplianceMatrix();
+		}
+
 	private:
 		// explicit integration
 		void StepUnconstrained(real h);
