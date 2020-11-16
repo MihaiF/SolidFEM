@@ -76,8 +76,7 @@ int main()
 	// load the tet file
 	nodes.clear();
 	tets.clear();
-	IO::LoadFromTet1File("hammerbot_fine.tet", 0.01, Vector3R(), nodes, tets);
-	// FIXME
+	IO::LoadFromTet1File("../Models/hammerbot_fine.tet", 0.01, Vector3R(), nodes, tets);
 	for (size_t i = 0; i < nodes.size(); i++)
 	{
 		nodes[i].pos0 = nodes[i].pos;
