@@ -412,6 +412,7 @@ namespace FEM_SYSTEM
 			r[i].SetZero();
 		}
 		ElasticEnergy::ComputeForces(this, r, material);
+		ComputeSpringForces(r);
 		if (mSimType == ST_IMPLICIT)
 		{
 			const real invH = 1.f / mTimeStep;
@@ -449,6 +450,12 @@ namespace FEM_SYSTEM
 		if (!mDirichletIndices.empty())
 		{
 			K += mDirichletStiffness * mDirichletJacobian.transpose() * mDirichletJacobian;
+		}
+		if (!mCables.empty())
+		{
+			SparseMatrix Ks;
+			ComputeSpringStiffnessMatrix(Ks);
+			K -= Ks;
 		}
 	}
 

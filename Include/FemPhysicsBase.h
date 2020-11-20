@@ -34,7 +34,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #define FEM_PHYSICS_BASE_H
 #include "FemDataStructures.h"
 #include "FemCollisions.h"
-#include "ElasticEnergy.h"
 #include <Engine/Utils.h>
 
 namespace FEM_SYSTEM
@@ -49,6 +48,13 @@ namespace FEM_SYSTEM
 			AXIS_Z = 4,
 		};
 
+		struct Cable
+		{
+			std::vector<SpringNode> mCableNodes;
+			Vector3Array mCablePositions;
+			real mActuation = 1.0;
+		};
+
 	public:
 		FemPhysicsBase(const FemConfig& config);
 		virtual ~FemPhysicsBase() {}
@@ -58,8 +64,8 @@ namespace FEM_SYSTEM
 		void HandleCollisions(real dt);
 
 		// interface getters/setters
-		virtual Vector3R GetDeformedPosition(uint32 idx) const = 0;
-		virtual void SetDeformedPosition(uint32 idx, Vector3R val) { ASSERT(false) };
+		virtual Vector3R GetDeformedPosition(uint32 idx, bool shuffle = true) const = 0;
+		virtual void SetDeformedPosition(uint32 idx, Vector3R val, bool shuffle = true) { ASSERT(false) };
 		virtual Vector3R GetInitialPosition(uint32 idx) const { ASSERT(false); return sZero; }
 		virtual Vector3R GetVelocity(uint32 idx) const { ASSERT(false); return sZero; }
 		virtual uint32 GetNumNodes() const = 0;
@@ -127,6 +133,22 @@ namespace FEM_SYSTEM
 		SparseMatrix GetHessian() const { return mHessian; }
 
 		void GetForceParamGrads(EigenVector& gradMu, EigenVector& gradLambda);
+		
+		virtual void AddCable(const std::vector<SpringNode>& cable, const Vector3Array& pos, real restLength, real stiffness, real damping, real actuation);
+		uint32 GetNumCables() const { return (uint32)mCables.size(); }
+		const Vector3R& GetCablePosition(uint32 cable, uint32 node) const { return mCables[cable].mCablePositions[node]; }
+		void SetCableActuation(uint32 cable, real actuation) { mCables[cable].mActuation = actuation; }
+		void ComputeSpringForces(Cable& cable, std::vector<Vector3R>& femForces);
+		void ComputeSpringForces(std::vector<Vector3R>& femForces);
+		
+		template <class MATRIX>
+		void ComputeSpringStiffnessMatrix(MATRIX& springStiffnessMatrix);
+
+		void ComputeDeformationGradients();
+		const Matrix3R& GetDeformationGradient(uint32 e) const { return mDefGrads[e]; }
+		const Matrix3R& GetDeformationGradientInverse(uint32 e) const { return mDefGradsInv[e]; }
+		real GetDeformationGradientDeterminant(uint32 e) const { return mDefGradsDet[e]; }
+		real ComputeElasticEnergy();
 
 	protected:
 		void AssembleDynamicContributions();
@@ -182,6 +204,15 @@ namespace FEM_SYSTEM
 		real mTotalInitialVol;
 
 		SparseMatrix mHessian;
+		
+		std::vector<Cable> mCables;
+		real mCableRestLength;
+		real mCableStiffness = 1000;
+		real mCableDamping = 0;
+
+		std::vector<Matrix3R> mDefGrads;
+		std::vector<Matrix3R> mDefGradsInv;
+		std::vector<real> mDefGradsDet;
 	};
 
 	inline void FemPhysicsBase::AddDirichletBC(uint32 i, uint32 axes)

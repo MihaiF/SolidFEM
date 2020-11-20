@@ -209,6 +209,11 @@ namespace FEM_SYSTEM
 
 		mForces.resize(nodes.size());
 
+		BuildMassMatrix();
+	}
+
+	void FemPhysicsMatrixFree::BuildMassMatrix()
+	{
 		// build lumped mass matrix
 		uint32 numDofs = GetNumFreeNodes() * 3;
 		mMassMatrix.resize(numDofs, numDofs);
@@ -257,6 +262,37 @@ namespace FEM_SYSTEM
 		}
 	}
 
+	void FemPhysicsMatrixFree::AddCable(const std::vector<SpringNode>& cable, const Vector3Array& pos, real restLength, real stiffness, real damping, real actuation)
+	{
+		FemPhysicsBase::AddCable(cable, pos, restLength, stiffness, damping, actuation);
+		// add new DOF nodes for the unattached spring nodes
+		Cable& currCable = mCables[mCables.size() - 1];
+		mNumSpringNodes = 0;
+		for (uint32 i = 0; i < cable.size(); i++)
+		{
+			int elem = cable[i].elem;
+			if (elem < 0)
+			{
+				const Tetrahedron& tet = tets[-elem];
+				real w0 = currCable.mCableNodes[i].bary.x;
+				real w1 = currCable.mCableNodes[i].bary.y;
+				real w2 = currCable.mCableNodes[i].bary.z;
+				real w3 = 1 - w0 - w1 - w2;
+				real invMass = w0 * nodes[tet.i[0]].invMass + w1 * nodes[tet.i[1]].invMass + w1 * nodes[tet.i[1]].invMass + w3 * nodes[tet.i[3]].invMass;
+
+				currCable.mCableNodes[i].elem = -((int)nodes.size());
+				Node node;
+				node.invMass = invMass; // TODO: average node mass
+				node.pos = currCable.mCablePositions[i];
+				nodes.push_back(node);
+				mNumSpringNodes++;
+			}
+		}
+		// rebuild the mass matrix
+		BuildMassMatrix();
+		mForces.resize(nodes.size());
+	}
+
 	void FemPhysicsMatrixFree::Step(real dt)
 	{
 		if (mSimType == ST_IMPLICIT)
@@ -279,6 +315,7 @@ namespace FEM_SYSTEM
 		else if (mSimType == ST_EXPLICIT)
 		{
 			real h = dt / mNumSteps;
+			mForceFraction = 1;
 			for (int i = 0; i < mNumSteps; i++)
 			{
 				SubStep(h);
@@ -313,66 +350,6 @@ namespace FEM_SYSTEM
 		}
 	}
 
-	// Helper function to compute the nodal elastic forces given the current configuration of the system
-	// It relies on linear elasticity (small strain tensor) to precompute the tangent stiffness matrix [Mueller]
-	void FemPhysicsMatrixFree::ComputeForces_LinearElasticity()
-	{
-		// TODO: Rayleigh damping D = alpha * M + beta * K (does not work for explicit integration at least)
-		// TODO: Co-rotational formulation using the pre-stored element stiffness matrix
-
-		disp.resize(nodes.size());
-		for (size_t i = 0; i < nodes.size(); i++)
-		{
-			disp[i] = nodes[i].pos - nodes[i].pos0; // + beta * nodes[i].vel;
-		}
-
-		for (size_t i = 0; i < tets.size(); i++)
-		{
-			Tetrahedron& tet = tets.at(i);
-
-			// compute node forces
-			for (int j = 0; j < 4; j++)
-			{
-				for (int k = 0; k < 4; k++)
-				{
-					nodes[tet.i[j]].force -= tet.K[j][k] * disp[tet.i[k]];
-				}
-				//if (nodes[nod].invMass != 0)
-					//nodes[nod].force -= (alpha / nodes[nod].invMass) * nodes[nod].vel; // Rayleigh damping: D = alpha * M (why the minus?)
-			}
-		}
-	}
-
-	// Helper function to compute the nodal elastic forces for a given tetrahedron and rotation
-	// It uses a co-rotated linear elasticity (a.k.a. warped stiffness) formulation that precomputes the tangent stiffness matrix [Mueller]
-	void FemPhysicsMatrixFree::ComputeForces_CorotationalElasticity(const Tetrahedron& tet, const Matrix3R& R)
-	{
-		// compute internal forces
-		Vector3R u[4];
-		const real alpha = 0.2f;
-		const real beta = 0.016f;
-		// compute displacements
-		for (int j = 0; j < 4; j++)
-		{
-			int n = tet.i[j];
-			u[j] = !R * nodes.at(n).pos - nodes.at(n).pos0 + beta * nodes.at(n).vel; // Rayleigh damping: D = beta * K; TODO: precompute
-		}
-
-		// compute node forces
-		for (int j = 0; j < 4; j++)
-		{
-			Vector3R f;
-			for (int k = 0; k < 4; k++)
-			{
-				f -= tet.K[j][k] * u[k];
-			}
-			int nod = tet.i[j];
-			if (nodes.at(nod).invMass != 0)
-				f -= (alpha / nodes.at(nod).invMass) * nodes.at(nod).vel; // Rayleigh damping: D = alpha * M (why the minus?)
-			nodes.at(nod).force += R * f;
-		}
-	}
-
 	void FemPhysicsMatrixFree::ComputeDeformationGradient(uint32 e, Matrix3R& F) const
 	{
 		const Tetrahedron& tet = tets[e];
@@ -389,175 +366,22 @@ namespace FEM_SYSTEM
 		F = Ds * tet.X;
 	}
 
-	// Helper function to compute the nodal elastic forces given the current configuration of the system
-	// STVK = St. Vennant - Kirchoff material model - just use Green strain instead of small strain, but keep linear elasticity law
-	// TODO: remove as obsolete
-	template<int NodalForces>
-	void FemPhysicsMatrixFree::ComputeForces()
-	{
-		// compute internal forces: reset nodal forces and add gravity to non-fixed nodes
-		for (size_t i = 0; i < nodes.size(); i++)
-		{
-			nodes.at(i).force.SetZero();
-		}
-		
-#ifdef CACHED_STIFFNESS_MATRIX
-		if (Material == MMT_LINEAR)
-		{
-			// a faster way of computing linear elastic nodal forces: f = Ku (K is cached)
-			ComputeForces_LinearElasticity();
-			return; // we bypass the rest of the code
-		}
-#endif
-
-		// helper constants
-		const Matrix3R id;
-		const real t = ed / (1.f + nud);
-		const real mu = GetShearModulus();
-		const real lambda = GetLameFirstParam();
-		const real mud = 0.5f * t;
-		const real lambdad = t * nud / (1.f - 2 * nud);
-
-		// go through all elements and add up nodal forces
-		for (size_t i = 0; i < tets.size(); i++)
-		{
-			// compute nodal forces for this element only
-			Tetrahedron& tet = tets.at(i);
-
-			Matrix3R F;
-			ComputeDeformationGradient(i, F);
-
-			Matrix3R R, U;
-			if (mMaterial == MMT_COROTATIONAL)
-			{
-				ComputePolarDecomposition(F, R, U);
-				F = U; // this seems to be broken for the torus!
-
-#ifdef CACHED_STIFFNESS_MATRIX
-				// precomputed K matrix alternative
-				ComputeForces_CorotationalElasticity(tet, R);
-				continue;
-#endif
-			}
-
-			// compute V = dF/dt - the velocity gradient
-			const Vector3R& v0 = nodes.at(tet.i[0]).vel;
-			const Vector3R& v1 = nodes.at(tet.i[1]).vel;
-			const Vector3R& v2 = nodes.at(tet.i[2]).vel;
-			const Vector3R& v3 = nodes.at(tet.i[3]).vel;
-			Matrix3R V = Matrix3R(v1 - v0, v2 - v0, v3 - v0) * tet.X;
-
-			// compute strain and strain rate as tensors
-			Matrix3R strain, strainRate;
-			if (mMaterial == MMT_LINEAR || mMaterial == MMT_COROTATIONAL || mMaterial == MMT_DISTORTIONAL_LINEAR)
-			{
-				strainRate = 0.5f * (V + !V); // Cauchy strain rate
-				strain = 0.5f * (F + !F) - id; // Cauchy strain
-			}
-			else
-			{
-				strain = 0.5f * (!F * F - id);	// Green strain	
-				strainRate = 0.5f * (!F * V + !V * F); // Green strain rate
-			}
-
-			// [Sifakis] version of computing the stress tensor
-			// compute PK1 stress tensors
-			Matrix3R piolae, piolad;
-			if (mMaterial == MMT_STVK)
-			{
-				// Green strain - StVK model
-				piolae = F * (2 * mu * strain + lambda * strain.Trace() * id);
-				piolad = F * (mud * strainRate + 0.5f * lambdad * strainRate.Trace() * id);
-			}
-			else if (mMaterial == MMT_LINEAR || mMaterial == MMT_DISTORTIONAL_LINEAR)
-			{
-				// Cauchy strain - linear elasticity
-				piolae = 2 * mu * strain + lambda * strain.Trace() * id;
-				piolad = mud * strainRate + 0.5f * lambdad * strainRate.Trace() * id;
-			}
-			else if (mMaterial == MMT_COROTATIONAL)
-			{
-				piolae = R * (2 * mu * strain + lambda * strain.Trace() * id);
-				piolad = R * (mud * strainRate + 0.5f * lambdad * strainRate.Trace() * id);
-			}
-			else if (mMaterial == MMT_NEO_HOOKEAN)
-			{
-				// Neo-Hookean [Sifakis]
-				Matrix3R Finv = F.GetInverse();
-				Matrix3R Finvtr = !Finv;
-				real J = F.Determinant();
-				piolae = mu * (F - Finvtr) + lambda * log(J) * Finvtr;
-				piolad = Matrix3R::Zero();
-			}
-
-			// compute the total PK1 stress tensor
-			Matrix3R P = piolae + piolad;
-
-			if (NodalForces == NFT_DIRECT)
-			{
-				// [Sifakis] approach at computing nodal forces 
-				// P needs to be the first Piola-Kirchoff (PK1) stress tensor
-				Matrix3R forces = -tet.vol * P * tet.Xtr; // material description as the volume is the undeformed one
-				//Matrix3R forces = P * tet.Bm; // the matrix from [Teran03], it should be Bm = -V * Dm^{-T} [Teran05]
-				for (int j = 1; j < 4; j++)
-				{
-					Vector3R f = forces(j - 1); // the j-1 column of 'forces'
-					nodes.at(tet.i[j]).force += f;
-					nodes.at(tet.i[0]).force -= f;
-				}
-			}
-			else
-			{
-				// finite volume approach to nodal forces [Mueller][Teran03]
-				for (int j = 0; j < 4; j++)
-				{
-					int j1 = tet.i[faces[j][0]];
-					int j2 = tet.i[faces[j][1]];
-					int j3 = tet.i[faces[j][2]];
-					int j4 = tet.i[j];
-
-					// when using deformed area the stress tensor should be Cauchy stress (spatial setting) [Mueller]
-					//Vector3R normalArea = cross(nodes[j2].pos - nodes[j1].pos, nodes[j3].pos - nodes[j1].pos);
-					//if (dot(normalArea, nodes[j4].pos - nodes[j1].pos) > 0) // if pointing in the same direction
-					//	normalArea.Flip();
-					//Vector3R splitFaceForce = (-1.f / 6.f) * P * normalArea;
-
-					// there is a typo in [Mueller]: it should be 6 instead of 3 in the denominator
-					// see [Teran03] just before sub-section 4.1
-					Vector3R splitFaceForce = (-1.f / 6.f) * P * tet.NA[j];
-					nodes[j1].force += splitFaceForce;
-					nodes[j2].force += splitFaceForce;
-					nodes[j3].force += splitFaceForce;
-				}
-
-				// alternatively we can precompute the nodal vectors, but that amounts to the Bm matrix approach above
-				//for (int j = 1; j < 4; j++)
-				//{
-				//	Vector3R force = P * tet.b[j];
-				//	nodes[tet.i[j]].force += force;
-				//	nodes[tet.i[0]].force -= force;
-				//}
-			}
-		}
-	}
-
-	// explicit instantiations for outside use
-	template void FemPhysicsMatrixFree::ComputeForces<FemPhysicsMatrixFree::NFT_DIRECT>();
-	template void FemPhysicsMatrixFree::ComputeForces<FemPhysicsMatrixFree::NFT_FINITE_VOLUME>();
-
 	// simplest way of doing time dependent FEM - explicit integration of the discretized system
 	void FemPhysicsMatrixFree::SubStep(real h)
 	{
-		// accumulate gravity and elastic forces in the nodes
-		ComputeForces<NFT_DIRECT>();
+		for (uint32 i = 0; i < mForces.size(); i++)
+			mForces[i].SetZero();
+		ElasticEnergy::ComputeForces(this, mForces);
+
+		ComputeSpringForces(mForces);
 
 		// integrate node velocities and positions using Symplectic Euler
 		for (size_t i = 0; i < nodes.size(); i++)
 		{
 			if (nodes[i].invMass == 0)
 				continue;
-			nodes.at(i).vel += (h * nodes.at(i).invMass) * nodes.at(i).force + h * mGravity;
-			nodes.at(i).pos += h * nodes.at(i).vel;
+			nodes[i].vel += (h * nodes[i].invMass) * mForces[i] + h * mGravity;
+			nodes[i].pos += h * nodes[i].vel;
 		}
 	}
 
@@ -716,6 +540,7 @@ namespace FEM_SYSTEM
 			mForces[i].SetZero();
 		ComputePressureForces(mForces, mTractionStiffnessMatrix);
 		ElasticEnergy::ComputeForces(this, mForces);
+		ComputeSpringForces(mForces);
 		const real invH = mTimeStep == 0 ? 0 : 1.f / mTimeStep;
 		const real invHSqr = mTimeStep == 0 ? 0 : 1.f / (mTimeStep * mTimeStep);
 		for (size_t i = 0; i < GetNumFreeNodes(); i++)
@@ -723,8 +548,13 @@ namespace FEM_SYSTEM
 			if (nodes[i + mNumBCs].invMass == 0)
 				continue; // this is for USE_CONSTRAINT_BCS but does no harm
 			real mass = 1.f / nodes[i + mNumBCs].invMass;
-			r[i] = mForces[i + mNumBCs] + mass * (mForceFraction * mGravity + invH * nodes[i + mNumBCs].vel);
-			r[i] -= mass * invHSqr * (nodes[i + mNumBCs].pos - nodes[i + mNumBCs].pos0); // the inertial term
+			r[i] = mForces[i + mNumBCs];
+			r[i] += mass * mForceFraction * mGravity;
+			if (i < GetNumFreeNodes() - mNumSpringNodes) // do not apply gravity or inertia to free cable nodes
+			{
+				r[i] += mass * invH * nodes[i + mNumBCs].vel;
+				r[i] -= mass * invHSqr * (nodes[i + mNumBCs].pos - nodes[i + mNumBCs].pos0);
+			}
 		}
 	}
 
@@ -873,7 +703,13 @@ namespace FEM_SYSTEM
 		{
 			K += mDirichletStiffness * mDirichletJacobian.transpose() * mDirichletJacobian;
 		}
-		//if (mConfig.mOptimizer)
+		if (!mCables.empty())
+		{
+			MATRIX Ks;
+			ComputeSpringStiffnessMatrix(Ks);
+			K -= Ks;
+		}
+		if (mConfig.mOptimizer)
 			Printf("energy: %g\n", ComputeEnergy());
 	}
 
@@ -1042,16 +878,16 @@ namespace FEM_SYSTEM
 		minimizer.Solve(*this, GetNumFreeNodes(), pos);
 	}
 
-	real FemPhysicsMatrixFree::ComputeEnergy() const
+	real FemPhysicsMatrixFree::ComputeEnergy()
 	{
-		real val = ElasticEnergy::ComputeEnergy(this);
+		real val = ComputeElasticEnergy();
 		// add the gravitational and kinetic part
 		real invHSqr = mTimeStep != 0 ? 0.5f / mTimeStep / mTimeStep : 0;
 		for (size_t i = 0; i < GetNumFreeNodes(); i++)
 		{
 			real mass = 1.f / nodes[i + mNumBCs].invMass;
 			val -= mass * mForceFraction * mGravity.y * nodes[i + mNumBCs].pos.y; // gravitational
-			val -= invHSqr * mass * GetTotalDisplacement(i).LengthSquared(); // kinetic
+			val -= invHSqr * mass * GetTotalDisplacement(i).LengthSquared(); // kinetic (delta)
 		}
 		// add the pressure part (WIP)
 		for (size_t i = 0; i < mTractionSurface.size() / 3; i += 3)
@@ -1071,12 +907,14 @@ namespace FEM_SYSTEM
 			real vol = (1.f / 6.f) * triple(p1, p2, p3);
 			val += abs(vol) * mAppliedPressure;
 		}
+		// add the springs
+		val += ComputeSpringEnergy();
 
 		//Printf("energy: %g\n", val);
 		return val;
 	}
 
-	real FemPhysicsMatrixFree::ComputeEnergy(int level) const
+	real FemPhysicsMatrixFree::ComputeEnergy(int level)
 	{
 		// level 0 -> elastic
 		// level 1 -> gravitational
@@ -1086,7 +924,7 @@ namespace FEM_SYSTEM
 		real val = 0;
 		
 		if (level == 0)
-			val += ElasticEnergy::ComputeEnergy(this);
+			val += ComputeElasticEnergy();
 		
 		// add the gravitational and kinetic part
 		real invHSqr = mTimeStep != 0 ? 0.5f / mTimeStep / mTimeStep : 0;
@@ -1218,6 +1056,67 @@ namespace FEM_SYSTEM
 		{
 			mTractionSurface[i] = triangleList[i];
 		}
+	}
+
+	real FemPhysicsMatrixFree::ComputeSpringEnergy(Cable& cable)
+	{
+		if (cable.mCableNodes.empty() || cable.mActuation == 0)
+			return 0;
+		uint32 numNodes = cable.mCableNodes.size();
+		uint32 numSprings = numNodes - 1;
+		// compute interpolated spring nodes
+		cable.mCablePositions.resize(numNodes);
+		Vector3Array vels(numNodes);
+		for (uint32 i = 0; i < numNodes; i++)
+		{
+			int elem = cable.mCableNodes[i].elem;
+			if (elem < 0)
+			{
+				cable.mCablePositions[i] = nodes[-elem].pos;
+				continue;
+			}
+			const Tetrahedron& tet = tets[elem];
+			const Vector3R& x0 = nodes[tet.i[0]].pos;
+			const Vector3R& x1 = nodes[tet.i[1]].pos;
+			const Vector3R& x2 = nodes[tet.i[2]].pos;
+			const Vector3R& x3 = nodes[tet.i[3]].pos;
+			real w0 = cable.mCableNodes[i].bary.x;
+			real w1 = cable.mCableNodes[i].bary.y;
+			real w2 = cable.mCableNodes[i].bary.z;
+			real w3 = 1 - w0 - w1 - w2;
+			cable.mCablePositions[i] = w0 * x0 + w1 * x1 + w2 * x2 + w3 * x3;
+			vels[i] = w0 * nodes[tet.i[0]].vel + w1 * nodes[tet.i[1]].vel + w2 * nodes[tet.i[2]].vel + w3 * nodes[tet.i[3]].vel;
+		}
+		// TODO: reuse cable positions
+		// 1. Compute spring errors and potentials
+		std::vector<Vector3R> springForces(numSprings);
+		const real eps = mCableRestLength * 0.01;
+		real energy = 0;
+		for (uint32 i = 0; i < numSprings; i++)
+		{
+			Vector3R y = cable.mCablePositions[i + 1] - cable.mCablePositions[i];
+			real len = y.Length();
+			Vector3R dir = (1.0 / len) * y;
+			real err = len - mCableRestLength * cable.mActuation;
+			real potential = mCableStiffness * (err * err + eps * eps / 3);
+			// Bern tension model (unilateral spring + twice differentiable)
+			if (err < -eps)
+				potential = 0;
+			else if (err >= -eps && err <= eps)
+				potential = 0.5 * mCableStiffness * (err * err * err / 3 / eps + err * err + eps * err + eps * eps / 3);
+			energy += potential;
+		}
+		return energy;
+	}
+
+	real FemPhysicsMatrixFree::ComputeSpringEnergy()
+	{
+		real energy = 0;
+		for (Cable& cable : mCables)
+		{
+			energy += ComputeSpringEnergy(cable);
+		}
+		return energy;
 	}
 
 } // namespace FEM_SYSTEM

@@ -63,7 +63,6 @@ namespace FEM_SYSTEM
 			const FemConfig& config);
 		void Step(real dt) override;
 		void SolveEquilibrium(float);
-		void SetBoundaryConditionsSurface(const std::vector<uint32>& triangleList, const std::vector<uint32>& elemList, real pressure);
 
 		uint32 GetNumLocalPressureNodes() const { return mPressureOrder == 0 ? 1 : 4; }
 		uint32 GetNumPressureNodes() const { return mNumPressureNodes; }

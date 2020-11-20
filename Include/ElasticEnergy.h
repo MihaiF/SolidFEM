@@ -43,12 +43,12 @@ namespace FEM_SYSTEM
 	class ElasticEnergy
 	{
 	public:
-		static real ComputeEnergy(const FemPhysicsBase* femPhysics, int material = -1);
-		static Matrix3R ComputeElementStress(const FemPhysicsBase* femPhysics, uint32 e, Matrix3R& Pmu, Matrix3R& Plambda, int material = -1);
-		static void ComputeForces(const FemPhysicsBase* femPhysics, std::vector<Vector3R>& fout, int material = -1);
+		static real ComputeElementEnergy(const FemPhysicsBase* femPhysics, uint32 e, int material = -1);
+		static Matrix3R ComputeElementStress(const FemPhysicsBase* femPhysics, uint32 e, Matrix3R& Pmu, Matrix3R& Plambda, bool update, int material = -1);
+		static void ComputeForces(FemPhysicsBase* femPhysics, std::vector<Vector3R>& fout, int material = -1);
 		static void ComputeForceParamGrads(const FemPhysicsBase* femPhysics, std::vector<Vector3R>& fmu, std::vector<Vector3R>& flambda, int material = -1);
 		static void ComputeForceParamGradsFD(FemPhysicsBase* femPhysics, std::vector<Vector3R>& fmu, std::vector<Vector3R>& flambda, int material = -1);
-		static void ComputeLocalForceDifferential(const FemPhysicsBase* femPhysics, uint32 e, const Vector3R dx[4], Vector3R df[4]);
+		static void ComputeLocalForceDifferential(const FemPhysicsBase* femPhysics, uint32 e, const Vector3R dx[4], Vector3R df[4], bool update);
 		static void ComputeLocalStiffnessMatrixFromDifferential(const FemPhysicsBase* femPhysics, uint32 e, EigenMatrix& Klocal);
 		
 		static void AssembleStiffnessMatrix(const FemPhysicsBase* femPhysics, EigenMatrix& stiffnessMatrix, EigenMatrix* bcStiffnessMatrix = nullptr);

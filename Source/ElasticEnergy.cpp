@@ -34,13 +34,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include "FemPhysicsBase.h"
 #include "PolarDecomposition.h"
 #include <Engine/Profiler.h>
-#include <Math/IterativeSolvers.h>
 
 namespace FEM_SYSTEM
 {
-	real ElasticEnergy::ComputeEnergy(const FemPhysicsBase* femPhysics, int material)
+	real ElasticEnergy::ComputeElementEnergy(const FemPhysicsBase* femPhysics, uint32 e, int material)
 	{
-		real totalEnergy = 0;
 		if (material == -1)
 			material = femPhysics->GetMaterial();
 
@@ -49,78 +47,71 @@ namespace FEM_SYSTEM
 		const real mu = femPhysics->GetShearModulus();
 		const real lambda = femPhysics->GetLameFirstParam();
 
-		// go through all elements and add up nodal forces
-		// TODO: OpenMP acceleration
-		for (int e = 0; e < (int)femPhysics->GetNumElements(); e++)
+		Matrix3R F = femPhysics->GetDeformationGradient(e);
+
+		Matrix3R R, U;
+		if (material == MMT_COROTATIONAL)
 		{
-			// compute nodal forces for this element only
-			Matrix3R F;
-			femPhysics->ComputeDeformationGradient(e, F);
-
-			Matrix3R R, U;
-			if (material == MMT_COROTATIONAL)
-			{
-				ComputePolarDecomposition(F, R, U);
-				F = U; // this seems to be broken for the torus!
-			}
-
-			// compute strain and strain rate as tensors
-			Matrix3R strain;
-			if (material == MMT_LINEAR ||
-				material == MMT_COROTATIONAL ||
-				material == MMT_DISTORTIONAL_LINEAR)
-			{
-				strain = 0.5f * (F + !F) - id; // Cauchy strain
-			}
-			else
-			{
-				strain = 0.5f * (!F * F - id);	// Green strain	
-			}
-
-			real energy = 0;
-			if (material == MMT_LINEAR ||
-				material == MMT_COROTATIONAL ||
-				material == MMT_STVK)
-			{
-				real trace = strain.Trace();
-				energy = mu * Matrix3R::DoubleContraction(strain, strain) + 0.5f * lambda * trace * trace;
-			}
-			else if (material == MMT_NEO_HOOKEAN)
-			{
-				real J = F.Determinant();
-				Matrix3R C = !F * F;
-				real I1 = C.Trace();
-				real logJ = log(J);
-				energy = 0.5f * mu * (I1 - 3) - mu * logJ + 0.5f * lambda * logJ * logJ;
-			}
-			else if (material == MMT_NEO_HOOKEAN_OGDEN)
-			{
-				real J = F.Determinant();
-				Matrix3R C = !F * F;
-				real I1 = C.Trace();
-				real logJ = log(J);
-				energy = 0.5f * mu * (I1 - 3) - mu * logJ + 0.5f * lambda * (J - 1) * (J - 1);
-			}
-			else if (material == MMT_DISTORTIONAL_MOONEY)
-			{
-				Matrix3R C = !F * F;
-				real I1 = C.Trace();
-				energy = 0.5f * mu * (I1 - 3);
-			}
-			else if (material == MMT_DISTORTIONAL_OGDEN)
-			{
-				real J = F.Determinant();
-				Matrix3R C = !F * F;
-				real I1 = C.Trace();
-				real logJ = log(J);
-				energy = 0.5f * mu * (I1 - 3) - mu * logJ;
-			}
-
-			totalEnergy += femPhysics->GetElementInitialVolume(e) * energy;
+			ComputePolarDecomposition(F, R, U);
+			F = U; // this seems to be broken for the torus!
 		}
-		return totalEnergy;
+
+		// compute strain and strain rate as tensors
+		Matrix3R strain;
+		if (material == MMT_LINEAR ||
+			material == MMT_COROTATIONAL ||
+			material == MMT_DISTORTIONAL_LINEAR)
+		{
+			strain = 0.5f * (F + !F) - id; // Cauchy strain
+		}
+		else
+		{
+			strain = 0.5f * (!F * F - id);	// Green strain	
+		}
+
+		real energy = 0;
+		if (material == MMT_LINEAR ||
+			material == MMT_COROTATIONAL ||
+			material == MMT_STVK)
+		{
+			real trace = strain.Trace();
+			energy = mu * Matrix3R::DoubleContraction(strain, strain) + 0.5f * lambda * trace * trace;
+		}
+		else if (material == MMT_NEO_HOOKEAN)
+		{
+			real J = F.Determinant();
+			Matrix3R C = !F * F;
+			real I1 = C.Trace();
+			real logJ = log(J);
+			energy = 0.5f * mu * (I1 - 3) - mu * logJ + 0.5f * lambda * logJ * logJ;
+		}
+		else if (material == MMT_NEO_HOOKEAN_OGDEN)
+		{
+			real J = F.Determinant();
+			Matrix3R C = !F * F;
+			real I1 = C.Trace();
+			real logJ = log(J);
+			energy = 0.5f * mu * (I1 - 3) - mu * logJ + 0.5f * lambda * (J - 1) * (J - 1);
+		}
+		else if (material == MMT_DISTORTIONAL_MOONEY)
+		{
+			Matrix3R C = !F * F;
+			real I1 = C.Trace();
+			energy = 0.5f * mu * (I1 - 3);
+		}
+		else if (material == MMT_DISTORTIONAL_OGDEN)
+		{
+			real J = F.Determinant();
+			Matrix3R C = !F * F;
+			real I1 = C.Trace();
+			real logJ = log(J);
+			energy = 0.5f * mu * (I1 - 3) - mu * logJ;
+		}
+
+		return femPhysics->GetElementInitialVolume(e) * energy;
 	}
-	Matrix3R ElasticEnergy::ComputeElementStress(const FemPhysicsBase* femPhysics, uint32 e, Matrix3R& Pmu, Matrix3R& Plambda, int material)
+
+	Matrix3R ElasticEnergy::ComputeElementStress(const FemPhysicsBase* femPhysics, uint32 e, Matrix3R& Pmu, Matrix3R& Plambda, bool update, int material)
 	{
 		Matrix3R id;
 		const real mu = femPhysics->GetShearModulus();
@@ -130,7 +121,10 @@ namespace FEM_SYSTEM
 
 		// compute nodal forces for this element only
 		Matrix3R F;
-		femPhysics->ComputeDeformationGradient(e, F);
+		if (!update)
+			F = femPhysics->GetDeformationGradient(e);
+		else
+			femPhysics->ComputeDeformationGradient(e, F);
 
 		Matrix3R R, U;
 		if (material == MMT_COROTATIONAL)
@@ -171,11 +165,19 @@ namespace FEM_SYSTEM
 		else if (material == MMT_NEO_HOOKEAN)
 		{
 			// Neo-Hookean [Sifakis]
-			Matrix3R Finv = F.GetInverse();
+			Matrix3R Finv;
+			real J;
+			if (update)
+			{
+				Finv = F.GetInverse();
+				J = F.Determinant();
+			}
+			else
+			{
+				Finv = femPhysics->GetDeformationGradientInverse(e);
+				J = femPhysics->GetDeformationGradientDeterminant(e);
+			}
 			Matrix3R Finvtr = !Finv;
-			real J = F.Determinant();
-			//if (J < 0)
-			//	Printf("negative jacobian :)\n");
 			Pmu = F - Finvtr;
 			Plambda = log(J) * Finvtr;
 			piolae = mu * Pmu + lambda * Plambda;
@@ -250,14 +252,15 @@ namespace FEM_SYSTEM
 		return piolae;
 	}
 
-	void ElasticEnergy::ComputeForces(const FemPhysicsBase* femPhysics, std::vector<Vector3R>& fout, int material)
+	void ElasticEnergy::ComputeForces(FemPhysicsBase* femPhysics, std::vector<Vector3R>& fout, int material)
 	{
-		// go through all elements and add up nodal forces
-		//#pragma omp parallel for
+		std::vector<Matrix3R> grads;
+		femPhysics->ComputeDeformationGradients();
+		// go through all elements and add up nodal forces		
 		for (int e = 0; e < (int)femPhysics->GetNumElements(); e++)
 		{
-			Matrix3R Pmu, Plambda;
-			auto piolae = ComputeElementStress(femPhysics, e, Pmu, Plambda, material);
+			Matrix3R P1, P2;
+			auto piolae = ComputeElementStress(femPhysics, e, P1, P2, false, material);
 			Matrix3R forces = -femPhysics->GetElementInitialVolume(e) * piolae * femPhysics->GetBarycentricJacobianMatrix(e); // material description as the volume is the undeformed one
 			uint32 i[4];
 			i[0] = femPhysics->GetGlobalIndex(e, 0);
@@ -331,7 +334,7 @@ namespace FEM_SYSTEM
 		femPhysics->SetLameParams(mu0, lambda0);
 	}
 
-	void ElasticEnergy::ComputeLocalForceDifferential(const FemPhysicsBase* femPhysics, uint32 e, const Vector3R dx[4], Vector3R df[4])
+	void ElasticEnergy::ComputeLocalForceDifferential(const FemPhysicsBase* femPhysics, uint32 e, const Vector3R dx[4], Vector3R df[4], bool update)
 	{
 		// compute deformation gradient increment dF
 		const Vector3R& x0 = dx[0];
@@ -346,7 +349,10 @@ namespace FEM_SYSTEM
 		Matrix3R dF = mat * !X;
 
 		Matrix3R F;
-		femPhysics->ComputeDeformationGradient(e, F); // we don't need it for linear, but never mind
+		if (update)
+			femPhysics->ComputeDeformationGradient(e, F); // we don't need it for linear, but never mind
+		else
+			F = femPhysics->GetDeformationGradient(e);
 
 		Matrix3R dP, id;
 
@@ -384,9 +390,19 @@ namespace FEM_SYSTEM
 		}
 		else if (femPhysics->GetMaterial() == MMT_NEO_HOOKEAN)
 		{
-			Matrix3R Finv = F.GetInverse();
+			Matrix3R Finv;
+			real J;
+			if (update)
+			{
+				Finv = F.GetInverse();
+				J = F.Determinant();
+			}
+			else
+			{
+				Finv = femPhysics->GetDeformationGradientInverse(e);
+				J = femPhysics->GetDeformationGradientDeterminant(e);
+			}
 			Matrix3R Finvtr = !Finv;
-			real J = F.Determinant();
 			dP = mu * dF + (mu - lambda * log(J)) * Finvtr * !dF * Finvtr + lambda * (Finv * dF).Trace() * Finvtr;
 		}
 		else if (femPhysics->GetMaterial() == MMT_DISTORTIONAL_NH7)
@@ -488,14 +504,10 @@ namespace FEM_SYSTEM
 			basisJ[j] = 1;
 			// compute A-dot product
 			Vector3R* dx2 = (Vector3R*)basisJ.data();
-			ElasticEnergy::ComputeLocalForceDifferential(femPhysics, e, dx2, &df[0]);
+			ElasticEnergy::ComputeLocalForceDifferential(femPhysics, e, dx2, &df[0], false); // reuses the existing deformation gradient
 			for (size_t i = 0; i < numDofs; i++)
 			{
-				// prepare unit vector
-				std::fill(basisI.begin(), basisI.end(), Vector3R(0));
-				basisI[i / 3][i % 3] = 1;
-				real val = InnerProduct<Vector3R, real>(basisI, df);
-				Klocal(i, j) = -val;
+				Klocal(i, j) = -df[i / 3][i % 3];
 			}
 		}
 	}
@@ -563,17 +575,26 @@ namespace FEM_SYSTEM
 		uint32 numBCs = (uint32)(femPhysics->GetNumNodes() - numNodes);
 		stiffnessMatrix.resize(numDofs, numDofs);
 		stiffnessMatrix.setZero();
-		std::vector<Eigen::Triplet<real>> triplets;
 		if (bcStiffnessMatrix)
 		{
 			bcStiffnessMatrix->resize(numDofs, numBCs * 3);
 			bcStiffnessMatrix->setZero();
 		}
-		// go through all linear elements (tetrahedra)
-		for (uint32 i = 0; i < femPhysics->GetNumElements(); i++)
+		// compute and store the local matrices (in parallel)
+		std::vector<EigenMatrix> localMats(femPhysics->GetNumElements());
+		#pragma omp parallel for
+		for (int i = 0; i < (int)femPhysics->GetNumElements(); i++)
 		{
 			EigenMatrix Klocal;
 			ElasticEnergy::ComputeLocalStiffnessMatrixFromDifferential(femPhysics, i, Klocal);
+			localMats[i] = Klocal;
+		}
+		// assemble the global matrix
+		static std::vector<Eigen::Triplet<real>> triplets; // avoids allocations, but it's shared
+		triplets.clear();
+		for (uint32 i = 0; i < femPhysics->GetNumElements(); i++)
+		{
+			const EigenMatrix& Klocal = localMats[i];
 			// the local stiffness matrix Klocal is organized in 3x3 blocks for each pair of nodes
 			for (uint32 j = 0; j < femPhysics->GetNumLocalNodes(); j++)
 			{

@@ -193,6 +193,12 @@ namespace FEM_SYSTEM
 		}
 	};
 
+	struct SpringNode
+	{
+		Vector3R bary; // barycentric coordinates inside element
+		int elem; // element index
+	};
+
 	typedef Eigen::Matrix<real, 6, 1> Vector6;
 
 	// A symmetric tensor (e.g. strain or stress) composed of 3 normal components and 3 shear components

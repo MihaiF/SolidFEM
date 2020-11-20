@@ -56,8 +56,8 @@ namespace FEM_SYSTEM
 		uint32 GetNumLocalNodes() const { return mTetMesh->GetNumNodesPerElement(); }
 		uint32 GetNumElements() const { return  mTetMesh->GetNumElements(); }
 		bool IsNodeFixed(uint32 i) const override { ASSERT(i < GetNumNodes()); return mReshuffleMap[i] < mNumBCs; }
-		Vector3R GetDeformedPosition(uint32 i) const override;
-		void SetDeformedPosition(uint32 i, Vector3R val) override;
+		Vector3R GetDeformedPosition(uint32 i, bool shuffle = true) const override;
+		void SetDeformedPosition(uint32 i, Vector3R val, bool shuffle = true) override;
 		Vector3R GetPreviousPosition(uint32 i) const;
 		Vector3R GetInitialPosition(uint32 i) const override { return mReferencePositions[mReshuffleMap[i]]; }
 		Vector3R GetVelocity(uint32 i) const override;
@@ -134,15 +134,15 @@ namespace FEM_SYSTEM
 		friend class FemTester;
 	};
 
-	inline Vector3R FemPhysicsLinear::GetDeformedPosition(uint32 i) const
+	inline Vector3R FemPhysicsLinear::GetDeformedPosition(uint32 i, bool shuffle) const
 	{
-		uint32 idx = mReshuffleMap[i];
+		uint32 idx = shuffle ? mReshuffleMap[i] : i;
 		return idx >= mNumBCs ? mDeformedPositions[idx - mNumBCs] : mReferencePositions[idx] + mInitialDisplacements[idx];
 	}
 
-	inline void FemPhysicsLinear::SetDeformedPosition(uint32 i, Vector3R val)
+	inline void FemPhysicsLinear::SetDeformedPosition(uint32 i, Vector3R val, bool shuffle)
 	{
-		uint32 idx = mReshuffleMap[i];
+		uint32 idx = shuffle ? mReshuffleMap[i] : i;
 		if (idx >= mNumBCs)
 			mDeformedPositions[idx - mNumBCs] = val;
 		else

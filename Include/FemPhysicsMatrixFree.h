@@ -67,9 +67,9 @@ namespace FEM_SYSTEM
 			std::vector<Node>& GetNodes(); // should we allow this?
 			const std::vector<Tetrahedron>& GetTetrahedra() const;
 			void UpdatePositions(std::vector<Node>& nodes) override;
-			Vector3R GetDeformedPosition(uint32 idx) const override { return nodes[mReshuffleMap[idx]].pos; }
+			Vector3R GetDeformedPosition(uint32 idx, bool shuffle = true) const override { return nodes[shuffle ? mReshuffleMap[idx] : idx].pos; }
 			Vector3R GetInitialPosition(uint32 idx) const override { return nodes[mReshuffleMap[idx]].pos0; } // Careful! These get over-written by implicit integrator
-			void SetDeformedPosition(uint32 idx, Vector3R val) override { nodes[mReshuffleMap[idx]].pos = val; }
+			void SetDeformedPosition(uint32 idx, Vector3R val, bool shuffle = true) override { nodes[shuffle ? mReshuffleMap[idx] : idx].pos = val; }
 			Vector3R GetVelocity(uint32 idx) const override { return nodes[mReshuffleMap[idx]].vel; }
 			uint32 GetNumNodes() const override { return (uint32)nodes.size(); }
 			uint32 GetNumLocalNodes() const override { return 4; }
@@ -88,8 +88,8 @@ namespace FEM_SYSTEM
 			void UpdatePosAndComputeGradients(const std::vector<Vector3R>& pos, std::vector<Vector3R>& r);
 			real DotProduct(const std::vector<Vector3R>& a, const std::vector<Vector3R>& b) const { return InnerProduct<Vector3R, real>(a, b); }
 
-			real ComputeEnergy() const; // basically the minimization objective
-			real ComputeEnergy(int level) const;
+			real ComputeEnergy(); // basically the minimization objective
+			real ComputeEnergy(int level);
 
 			// Newton solver helpers
 			EigenVector ComputeRhs(const EigenVector& solution);			
@@ -101,15 +101,14 @@ namespace FEM_SYSTEM
 			Vector3R GetTotalDisplacement(uint32 i) const { return (nodes[i + mNumBCs].pos - nodes[i + mNumBCs].pos0); }
 			void SetBoundaryConditionsSurface(const std::vector<uint32>& triangleList, real pressure) override;
 
+			real ComputeSpringEnergy(Cable& cable);
+			real ComputeSpringEnergy();
+
 		private:
 			// traditional FEM
 			void SubStep(real h);
 			bool Solve();
 
-			template<int NodalForces = NFT_DIRECT> void ComputeForces();
-			void ComputeForces_LinearElasticity();
-			void ComputeForces_CorotationalElasticity(const Tetrahedron& tet, const Matrix3R& R);
-						
 			// nonlinear static solvers
 			void SolveNewtonCG();
 			bool SolveNewton();
@@ -124,8 +123,11 @@ namespace FEM_SYSTEM
 
 			void ReshuffleFixedNodes();
 
+			void AddCable(const std::vector<SpringNode>& cable, const Vector3Array& pos, real restLength, real stiffness, real damping, real actuation) override;
+
 		protected:
 			void ComputeForceDifferential(const std::vector<Vector3R>& dx, std::vector<Vector3R>& df) const;
+			void BuildMassMatrix();
 
 		protected:
 			std::vector<Node> nodes;
@@ -144,6 +146,8 @@ namespace FEM_SYSTEM
 			SparseMatrix mMassMatrix;
 
 			mutable std::vector<Matrix3R> dH;
+
+			uint32 mNumSpringNodes = 0;
 
 			friend class FemSystem;
 			friend class ElasticProblem;

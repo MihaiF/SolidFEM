@@ -210,29 +210,6 @@ namespace FEM_SYSTEM
 			mDeformedPositions[i] += u[i];
 	}
 
-	void FemPhysicsLinearIncompressible::SetBoundaryConditionsSurface(const std::vector<uint32>& triangleList, const std::vector<uint32>& elemList, real pressure)
-	{
-		mAppliedPressure = pressure;
-		mFixedPressureRows.clear();
-		mTractionSurface.resize(triangleList.size());
-
-		for (uint32 i = 0; i < triangleList.size(); i++)
-		{
-			int origIdx = triangleList[i]; // index in the original linear mesh
-			int idx = mReshuffleMap[origIdx] - mNumBCs; // index in the reshuffled displacement nodes array
-			ASSERT(idx >= 0);
-			if (mPressureOrder == 1)
-				mFixedPressureRows.insert(origIdx); // for pressure BCs (pressure per node)
-			mTractionSurface[i] = idx;
-		}
-
-		if (mPressureOrder == 0)
-		{
-			for (uint32 i = 0; i < elemList.size(); i++)
-				mFixedPressureRows.insert(elemList[i]);
-		}
-	}
-
 	EigenVector FemPhysicsLinearIncompressible::ComputeTotalForce(bool corotational)
 	{
 		if (corotational)
