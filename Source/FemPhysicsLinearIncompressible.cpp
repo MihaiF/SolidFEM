@@ -840,10 +840,11 @@ namespace FEM_SYSTEM
 
 		J.resize(numPNodes, nDof);
 		J.setZero();
-		mFixedJacobian = EigenMatrix(mNumFixedP, nDof);
-		mFixedJacobian.setZero();
+		mBCJacobian.resize(numPNodes, mNumBCs * 3);
+		mBCJacobian.setZero();
 		real factor = mPressureOrder == 1 ? 0.25f : 1.f;
 		int fixedCounter = 0;
+		std::vector<Eigen::Triplet<real>> triplets;
 		for (uint32 e = 0; e < GetNumElements(); e++)
 		{
 			Vector3R v[10];
@@ -876,10 +877,10 @@ namespace FEM_SYSTEM
 				for (uint32 k = 0; k < GetNumLocalNodes(); k++)
 				{
 					uint32 globalK = mReshuffleMap[mTetMesh->GetGlobalIndex(e, k)];
-					if (globalK < mNumBCs)
-						continue;
+					//if (globalK < mNumBCs)
+					//	continue;
 					int baseCol = (globalK - mNumBCs) * NUM_POS_COMPONENTS;
-					if (mOrder == 2 && mPressureOrder == 1)
+					if (mOrder == 2 && mPressureOrder == 1 && globalK >= mNumBCs)
 					{
 						MultiIndex C = mPressureMesh->GetIJKL(j);
 						Vector3R v;
@@ -898,15 +899,17 @@ namespace FEM_SYSTEM
 					{
 						for (int l = 0; l < NUM_POS_COMPONENTS; l++)
 						{
-							if (globalJ >= numPNodes)
-								mFixedJacobian.coeffRef(globalJ - numPNodes, baseCol + l) += factor * Jlocal(0, k * NUM_POS_COMPONENTS + l);
+							real val = factor * Jlocal(0, k * NUM_POS_COMPONENTS + l);
+							if (globalK < mNumBCs)
+								mBCJacobian.coeffRef(globalJ, globalK * NUM_POS_COMPONENTS + l) += val;
 							else
-								J.coeffRef(globalJ, baseCol + l) += factor * Jlocal(0, k * NUM_POS_COMPONENTS + l);
+								triplets.push_back(Eigen::Triplet<real>(globalJ, baseCol + l, val));
 						}
 					}
 				}
 			}
 		}
+		J.setFromTriplets(triplets.begin(), triplets.end());
 	}
 
 	void FemPhysicsLinearIncompressible::ComputeLocalDeviatoricStiffnessMatrixBB2(uint32 k, EigenMatrix& Klocal)
