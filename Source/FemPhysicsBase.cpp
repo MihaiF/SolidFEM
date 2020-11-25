@@ -170,7 +170,7 @@ namespace FEM_SYSTEM
 		mCables.push_back(femCable);
 	}
 
-	void FemPhysicsBase::GetForceParamGrads(EigenVector& gradMu, EigenVector& gradLambda)
+	void FemPhysicsBase::GetForceParamGrads(EigenVector& gradMu, EigenVector& gradLambda, EigenVector& gradRho)
 	{
 		std::vector<Vector3R> fmu;
 		std::vector<Vector3R> flambda;
@@ -178,6 +178,23 @@ namespace FEM_SYSTEM
 
 		gradMu = GetEigenVector(fmu, mNumBCs);
 		gradLambda = GetEigenVector(flambda, mNumBCs);
+
+		std::vector<real> nodalVols(GetNumNodes());
+		for (uint32 e = 0; e < GetNumElements(); e++)
+		{
+			real vol = GetElementInitialVolume(e);
+			for (uint32 l = 0; l < 4; l++)
+			{
+				uint32 i = GetGlobalIndex(e, l);
+				nodalVols[i] += 0.25 * vol;
+			}
+		}
+		std::vector<Vector3R> frho(GetNumFreeNodes());
+		for (uint32 i = 0; i < GetNumFreeNodes(); i++)
+		{
+			frho[i] = nodalVols[i + mNumBCs] * mGravity;
+		}
+		gradRho = GetEigenVector(frho);
 	}
 
 	void FemPhysicsBase::ComputeDeformationGradients()

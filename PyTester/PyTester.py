@@ -200,9 +200,11 @@ def test_cantilever_static():
     def jacobian(x):
         mu = x[0]
         la = x[1]
+        #rho = x[2]
         print("jac: ", mu, la)
         config["young"] = mu * (3.0 * la + 2.0 * mu) / (mu + la)
         config["poisson"] = 0.5 * la / (la + mu)
+        #config["density"] = rho
         simC = psf.NonlinearFEM(indices, verts, fixed2, config)
         simC.step() # simulate with current positions and params
         nodesC = simC.get_nodes()
@@ -211,14 +213,8 @@ def test_cantilever_static():
         simC.compute_force_param_grads()
         f_mu = simC.get_force_mu_grad()
         f_lambda = simC.get_force_lambda_grad()
-        # TODO: linear solver
-        #Hinv = np.linalg.inv(H)
-        #x_mu = np.matmul(Hinv, f_mu)
-        #x_lambda = np.matmul(Hinv, f_lambda)
-        #jacobian = np.empty(2)
-        #jacobian[0] = np.dot(x_mu, delta[9 * 3:])
-        #jacobian[1] = np.dot(x_lambda, delta[9 * 3:])
-        grad = np.linalg.solve(H, np.column_stack((f_mu, f_lambda)))
+        #f_rho = simC.get_force_rho_grad()
+        grad = np.linalg.solve(H, np.column_stack((f_mu, f_lambda)))#, f_rho)))
         J = np.matmul(np.transpose(grad), delta[9 * 3:])
         return J
 
@@ -264,20 +260,20 @@ def test_cantilever_static():
     #ax.plot(las, loss)
     #fig.savefig("loss_lambda.png")
 
-    #mu = 20000;
-    #la = 200000;
-    #rho = 1000
-    #x0 = [mu, la]
-    ##sol = minimize(inverse_objective, x0, method='Nelder-Mead')
-    #sol = minimize(inverse_objective, x0, method="BFGS", jac=jacobian, options={'gtol': 1e-12})
-    ##sol = opt.least_squares(residual, x0, method='dogbox')
-    ##sol = opt.dual_annealing(inverse_objective, bounds=((10000, 30000), (200000, 210000)))
-    #print(sol)
-    #mu = sol.x[0]
-    #la = sol.x[1]
-    ##rho = sol.x[2]
-    #print(mu, la, rho)
-    #print(sim.mu, sim.la)
+    mu = 20000;
+    la = 200000;
+    #rho = 1050
+    x0 = [mu, la]#, rho]
+    #sol = minimize(inverse_objective, x0, method='Nelder-Mead')
+    sol = minimize(inverse_objective, x0, method="BFGS", jac=jacobian, options={'gtol': 1e-12})
+    #sol = opt.least_squares(residual, x0, method='dogbox')
+    #sol = opt.dual_annealing(inverse_objective, bounds=((10000, 30000), (200000, 210000)))
+    print(sol)
+    mu = sol.x[0]
+    la = sol.x[1]
+    #rho = sol.x[2]
+    print(mu, la)#, rho)
+    print(sim.mu, sim.la)
 
     # Python torch simulator
     #sim2 = TorchSimulator(verts, indices, fixed2, config)
@@ -369,8 +365,8 @@ def test_hammerbot():
 
 torch.set_printoptions(precision=8)
 #test_tetrahedron_static()
-#test_cantilever_static()
-test_hammerbot()
+test_cantilever_static()
+#test_hammerbot()
 
 # explicit integration
 #fem = psf.NonlinearFEM('hammerbot_explicit.xml')

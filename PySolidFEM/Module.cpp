@@ -36,48 +36,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <pybind11/stl.h>
 #include <pybind11/eigen.h>
 
-#include <Include/FemBody.h>
-#include <Include/FemPhysicsMatrixFree.h>
-#include <Include/FemPhysicsMixed.h>
-#include <Include/FemIO.h>
-
+#include "PyNonlinearFEM.h"
 
 namespace py = pybind11;
-
-using namespace FEM_SYSTEM;
-
-const real DT = 0.016;
-
-class PyNonlinearFEM
-{
-public:
-	PyNonlinearFEM(py::array_t<int> tets, py::array_t<double> nodes, py::array_t<int> fixed_nodes, py::dict config);
-	PyNonlinearFEM(py::str path);
-	void Step(real dt = DT);
-	py::array_t<double> GetNodes() const;
-	py::array_t<int> GetTets() const;
-	void SaveToVTK(py::str path);
-	void SaveToOBJ(py::str path);
-	void SetLameParams(real mu, real lambda) { mPhys->SetLameParams(mu, lambda); }
-	real GetShearModulus() const { return mPhys->GetShearModulus(); }
-	real GetLameLambda() const { return mPhys->GetLameFirstParam(); }
-	EigenMatrix GetHessian() const { return EigenMatrix(mPhys->GetHessian()); }
-	void ComputeForceParamGrads() { mPhys->GetForceParamGrads(mForceGradMu, mForceGradLambda); }
-	EigenVector GetForceMuGrad() const { return mForceGradMu; }
-	EigenVector GetForceLambdaGrad() const { return mForceGradLambda; }
-
-private:
-	FemConfig ParseConfig(py::dict config);
-
-private:
-	FemBody mBody;
-	std::unique_ptr<FemPhysicsBase> mPhys;
-	FemPhysicsMatrixFree::Config mNonlinConfig;
-	FemPhysicsMixed::Config mMixedConfig;
-	bool mUseMixed = false;
-	EigenVector mForceGradMu;
-	EigenVector mForceGradLambda;
-};
 
 PyNonlinearFEM::PyNonlinearFEM(py::array_t<int> tets, py::array_t<double> nodes, py::array_t<int> fixed_nodes, py::dict config)
 {
@@ -340,5 +301,6 @@ PYBIND11_MODULE(pysolidfem, m) {
 		.def("get_hessian", &PyNonlinearFEM::GetHessian)
 		.def("compute_force_param_grads", &PyNonlinearFEM::ComputeForceParamGrads)
 		.def("get_force_mu_grad", &PyNonlinearFEM::GetForceMuGrad)
-		.def("get_force_lambda_grad", &PyNonlinearFEM::GetForceLambdaGrad);
+		.def("get_force_lambda_grad", &PyNonlinearFEM::GetForceLambdaGrad)
+		.def("get_force_rho_grad", &PyNonlinearFEM::GetForceRhoGrad);
 }

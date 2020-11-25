@@ -157,6 +157,9 @@
       <Project>{a404bcdf-09e9-4026-8d13-43b364fa6d2f}</Project>
     </ProjectReference>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="PyNonlinearFEM.h" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

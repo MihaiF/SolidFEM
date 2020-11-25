@@ -79,7 +79,7 @@ int main(int argc, char* argv[], char* envp[])
 		if (flag[0] == '-' && flag[1] == 'S')
 		{
 			flag += 2;
-			scale = atof(flag);
+			scale = (float)atof(flag);
 		}
 	}
 
