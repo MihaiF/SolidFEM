@@ -177,6 +177,9 @@ def test_cantilever_static():
     simC.save_to_obj('cantilever.obj')
     print(nodes2[-1])
     plot_nodes(nodes2)
+    V, F = simC.get_boundary_mesh()
+    print(V)
+    print(F)
 
     # parameter estimation
     target = nodes2

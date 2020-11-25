@@ -67,6 +67,7 @@ public:
 	EigenVector GetForceMuGrad() const { return mForceGradMu; }
 	EigenVector GetForceLambdaGrad() const { return mForceGradLambda; }
 	EigenVector GetForceRhoGrad() const { return mForceGradLambda; }
+	py::tuple GetBoundaryMesh() const;
 
 private:
 	FemConfig ParseConfig(py::dict config);
