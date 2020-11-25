@@ -58,8 +58,8 @@ namespace FEM_SYSTEM
 		};
 
 	public:
-		FemPhysicsLinearIncompressible(std::vector<Tet>& tetrahedra,
-			std::vector<Node>& nodes,
+		FemPhysicsLinearIncompressible(const std::vector<Tet>& tetrahedra,
+			const std::vector<Node>& nodes,
 			const FemConfig& config);
 		void Step(real dt) override;
 		void SolveEquilibrium(float);

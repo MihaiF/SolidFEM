@@ -162,6 +162,7 @@
     <ClInclude Include="Engine\Profiler.h" />
     <ClInclude Include="Engine\Types.h" />
     <ClInclude Include="Engine\Utils.h" />
+    <ClInclude Include="Include\FemBody.h" />
     <ClInclude Include="Include\FemCollisions.h" />
     <ClInclude Include="Include\FemDataStructures.h" />
     <ClInclude Include="Include\FemIO.h" />
@@ -173,6 +174,7 @@
     <ClInclude Include="Include\FemPhysicsMatrixFree.h" />
     <ClInclude Include="Include\FemPhysicsMixed.h" />
     <ClInclude Include="Include\LinearSolver.h" />
+    <ClInclude Include="Include\MeshTools.h" />
     <ClInclude Include="Include\MixedProblems.h" />
     <ClInclude Include="Include\NewtonSolver.h" />
     <ClInclude Include="Include\NonlinearCG.h" />
@@ -188,6 +190,7 @@
   <ItemGroup>
     <ClCompile Include="FEMLibrary.cpp" />
     <ClCompile Include="Source\ElasticEnergy.cpp" />
+    <ClCompile Include="Source\FemBody.cpp" />
     <ClCompile Include="Source\FemIO.cpp" />
     <ClCompile Include="Source\FemPhysicsBase.cpp" />
     <ClCompile Include="Source\FemPhysicsCorotationalElasticity.cpp" />
@@ -201,6 +204,7 @@
     <ClCompile Include="Source\FemPhysicsMatrixFree.cpp" />
     <ClCompile Include="Source\FemPhysicsMixed.cpp" />
     <ClCompile Include="Source\LinearSolver.cpp" />
+    <ClCompile Include="Source\MeshTools.cpp" />
     <ClCompile Include="Source\PolarDecomposition.cpp" />
     <ClCompile Include="Source\SaddlePointProblem.cpp" />
     <ClCompile Include="Source\tinyxml2.cpp" />

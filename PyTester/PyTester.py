@@ -148,6 +148,7 @@ def test_cantilever_static():
     config = {
         "young": 66000,
         "poisson": 0.45,
+        'density': 1070,
         "simtype": 0,
         "substeps": 10,
         'maxiter': 100,
@@ -173,6 +174,7 @@ def test_cantilever_static():
     simC.step()
     nodes2 = simC.get_nodes()
     simC.save_to_vtk('cantilever.vtk')
+    simC.save_to_obj('cantilever.obj')
     print(nodes2[-1])
     plot_nodes(nodes2)
 
@@ -182,9 +184,11 @@ def test_cantilever_static():
     def inverse_objective(x):
         mu = x[0]
         la = x[1]
-        print("loss: ", mu, la)
+        #rho = x[2]
+        #print("loss: ", mu, la)
         config["young"] = mu * (3.0 * la + 2.0 * mu) / (mu + la)
         config["poisson"] = 0.5 * la / (la + mu)
+        #config["density"] = rho
         simC = psf.NonlinearFEM(indices, verts, fixed2, config)
         simC.step()
         nodesC = simC.get_nodes()
@@ -260,17 +264,20 @@ def test_cantilever_static():
     #ax.plot(las, loss)
     #fig.savefig("loss_lambda.png")
 
-    mu = 20000;
-    la = 200000;
-    x0 = [mu, la]
-    #sol = minimize(inverse_objective, x0, method='Nelder-Mead')
-    sol = minimize(inverse_objective, x0, method="BFGS", jac=jacobian, options={'gtol': 1e-12})
-    #sol = opt.least_squares(residual, x0, method='dogbox')
-    #sol = opt.dual_annealing(inverse_objective, bounds=((10000, 30000), (200000, 210000)))
-    print(sol)
-    mu = sol.x[0]
-    la = sol.x[1]
-    print(mu, la)      
+    #mu = 20000;
+    #la = 200000;
+    #rho = 1000
+    #x0 = [mu, la]
+    ##sol = minimize(inverse_objective, x0, method='Nelder-Mead')
+    #sol = minimize(inverse_objective, x0, method="BFGS", jac=jacobian, options={'gtol': 1e-12})
+    ##sol = opt.least_squares(residual, x0, method='dogbox')
+    ##sol = opt.dual_annealing(inverse_objective, bounds=((10000, 30000), (200000, 210000)))
+    #print(sol)
+    #mu = sol.x[0]
+    #la = sol.x[1]
+    ##rho = sol.x[2]
+    #print(mu, la, rho)
+    #print(sim.mu, sim.la)
 
     # Python torch simulator
     #sim2 = TorchSimulator(verts, indices, fixed2, config)
@@ -287,35 +294,37 @@ def test_hammerbot():
     }
 
     # create the simulator from file
-    fem = psf.NonlinearFEM('../Models/hammerbot.xml')
+    path = '../Models/hammerbot.xml'
+    fem = psf.NonlinearFEM(path)
     fem.step()
     nodes = fem.get_nodes()
     fem.save_to_vtk("../Models/hammerbot.vtk")
+    fem.save_to_obj('hammerbot.obj')
     
     # parameter estimation
-    target = nodes
+    #target = nodes
 
-    def inverse_objective(x):
-        mu = x[0]
-        la = x[1]
-        print(mu, la)
-        simC = psf.NonlinearFEM('hammerbot.xml')
-        simC.set_lame_params(mu, la)
-        simC.step() # simulate with current positions and params
-        nodesC = simC.get_nodes()
-        delta = (nodesC - target).flatten()
-        error = np.dot(delta, delta)
-        print('err {:E}'.format(error))
-        return error
+    #def inverse_objective(x):
+    #    mu = x[0]
+    #    la = x[1]
+    #    print(mu, la)
+    #    simC = psf.NonlinearFEM(path)
+    #    simC.set_lame_params(mu, la)
+    #    simC.step() # simulate with current positions and params
+    #    nodesC = simC.get_nodes()
+    #    delta = (nodesC - target).flatten()
+    #    error = np.dot(delta, delta)
+    #    print('err {:E}'.format(error))
+    #    return error
 
-    mu = 30000;
-    la = 120000;
-    x0 = [mu, la]
-    sol = minimize(inverse_objective, x0, method='Nelder-Mead')
-    print(sol.message)
-    mu = sol.x[0]
-    la = sol.x[1]
-    print(mu, la)      
+    #mu = 30000;
+    #la = 120000;
+    #x0 = [mu, la]
+    #sol = minimize(inverse_objective, x0, method='Nelder-Mead')
+    #print(sol.message)
+    #mu = sol.x[0]
+    #la = sol.x[1]
+    #print(mu, la)      
 
     # plot the loss function w.r.t. mu
     #mu_min = 10000
@@ -360,8 +369,8 @@ def test_hammerbot():
 
 torch.set_printoptions(precision=8)
 #test_tetrahedron_static()
-test_cantilever_static()
-#test_hammerbot()
+#test_cantilever_static()
+test_hammerbot()
 
 # explicit integration
 #fem = psf.NonlinearFEM('hammerbot_explicit.xml')

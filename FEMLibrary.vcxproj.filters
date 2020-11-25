@@ -99,6 +99,12 @@
     <ClInclude Include="Include\FemIO.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Include\FemBody.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Include\MeshTools.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\FemPhysicsLinear.cpp">
@@ -141,6 +147,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Source\tinyxml2.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\FemBody.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\MeshTools.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

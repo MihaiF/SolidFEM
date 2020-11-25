@@ -42,8 +42,8 @@ namespace FEM_SYSTEM
 	class FemPhysicsMixed : public FemPhysicsLinearIncompressible
 	{
 	public:
-		FemPhysicsMixed(std::vector<Tet>& tetrahedra,
-			std::vector<Node>& allNodes, const FemConfig& config);
+		FemPhysicsMixed(const std::vector<Tet>& tetrahedra,
+			const std::vector<Node>& allNodes, const FemConfig& config);
 
 		void Step(real dt) override;
 

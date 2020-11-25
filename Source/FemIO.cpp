@@ -39,7 +39,7 @@ namespace FEM_SYSTEM
 {
 	bool IO::LoadFromFebFile(const char* path, std::vector<Node>& nodes, std::vector<Tet>& tets, 
 		std::vector<int>& fixedNodes, std::vector<uint32>& surfTris, std::set<uint32>& innerSurface, 
-		real scale, FemConfig* femConfig, int* bcFlag, std::vector<uint32>* bcIndices)
+		float scale, FemConfig* femConfig, int* bcFlag, std::vector<uint32>* bcIndices)
 	{
 		fixedNodes.clear();
 		nodes.clear();
@@ -581,7 +581,7 @@ namespace FEM_SYSTEM
 	}
 
 	bool IO::LoadFromXmlFile(const char* path, std::vector<Node>& nodes, std::vector<Tet>& tets,
-		std::vector<int>& fixedNodes, std::vector<uint32>& surfTris, FemConfig& femConfig)
+		std::vector<int>& fixedNodes, std::vector<uint32>& surfTris, FemConfig& femConfig, float& scale, std::string& visualPath)
 	{
 		// extract directory name
 		std::string fileName(path);
@@ -608,10 +608,16 @@ namespace FEM_SYSTEM
 			if (!modelName)
 				return false;
 			std::string modelPath = dir + modelName;
-			real scale = 1;
+			scale = 1;
 			const char* xScale = xModel->Attribute("scale");
 			if (xScale)
-				scale = atof(xScale);
+				scale = (float)atof(xScale);
+
+			const char* visualName = xModel->Attribute("visual");
+			if (visualName)
+			{
+				visualPath = dir + visualName;
+			}
 
 			const char* type = xModel->Attribute("type");
 			if (strcmp(type, "vol") == 0)

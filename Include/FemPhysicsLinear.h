@@ -48,8 +48,8 @@ namespace FEM_SYSTEM
 		};
 
 	public:
-		FemPhysicsLinear(std::vector<Tet>& tetrahedra,
-			std::vector<Node>& allNodes, const FemConfig& config);
+		FemPhysicsLinear(const std::vector<Tet>& tetrahedra,
+			const std::vector<Node>& allNodes, const FemConfig& config);
 
 		uint32 GetNumNodes() const override { return mTetMesh->GetNumNodes(); }
 		uint32 GetNumFreeNodes() const { ASSERT(mNumBCs < GetNumNodes()); return GetNumNodes() - mNumBCs; }
@@ -90,7 +90,7 @@ namespace FEM_SYSTEM
 		void ComputeLocalMassMatrixBB2(real density, uint32 numLocalNodes, EigenMatrix& Mlocal);
 		void ComputeLocalMassMatrixBB(real density, uint32 numLocalNodes, EigenMatrix& Mlocal);
 		void AssembleMassMatrix();
-		void CreateMeshAndDofs(std::vector<Tet>& tetrahedra, std::vector<Node>& nodes);
+		void CreateMeshAndDofs(const std::vector<Tet>& tetrahedra, const std::vector<Node>& nodes);
 
 		void ComputeBarycentricJacobian(uint32 i, Vector3R y[4]);
 		void ComputeStrainJacobian(uint32 i, Matrix3R Bn[4], Matrix3R Bs[4]);

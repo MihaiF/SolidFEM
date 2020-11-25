@@ -40,7 +40,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 namespace FEM_SYSTEM
 {
 
-	FemPhysicsMixed::FemPhysicsMixed(std::vector<Tet>& tetrahedra, std::vector<Node>& allNodes, const FemConfig& config) 
+	FemPhysicsMixed::FemPhysicsMixed(const std::vector<Tet>& tetrahedra, const std::vector<Node>& allNodes, const FemConfig& config) 
 		: FemPhysicsLinearIncompressible(tetrahedra, allNodes, config)
 	{
 		std::fill(mPressures.begin(), mPressures.end(), 0); // zero pressures

@@ -1,7 +1,7 @@
 /*
 BSD 3-Clause License
 
-Copyright (c) 2019, Mihai Francu
+Copyright (c) 2020, Mihai Francu
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -30,48 +30,85 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef STRIDED_VECTOR_H
-#define STRIDED_VECTOR_H
+#pragma once
 
-// Custom references
+#include <vector>
+#include <Math/Vector3.h>
 #include <Engine/Types.h>
 
+using Math::Vector3;
 
-template<class T>
-class StridedVector {
-public:
+struct Mesh
+{
+	std::vector<Vector3> vertices;
+	std::vector<Vector3> normals;
+	std::vector<Vector3> colors;
+	//std::vector<Vector2> uvs;
+	std::vector<uint32> indices;
 
-	StridedVector(const T* buffer, uint elements, uint stride)
+	size_t GetNumTriangles() const { return indices.size() / 3; }
+
+	void AddTriangle(uint32 a, uint32 b, uint32 c, bool flip = false)
 	{
-		// TODO remove 'elements' as it is not really used for anything?
-		// -> The buffer might even change in size after the stridedvector has been initialized
-
-		// Assert that buffer is not pointing to null
-		mBuffer = buffer;
-		mElements = elements;
-		mStride = stride;
+		indices.push_back(a);
+		if (!flip)
+		{
+			indices.push_back(b);
+			indices.push_back(c);
+		}
+		else
+		{
+			indices.push_back(c);
+			indices.push_back(b);
+		}
 	}
 
-	~StridedVector()
-	{
-		// Do nothing
-	}
-
-	T* GetAt(uint element)
-	{
-		// Assert that element < mElements
-
-		char* ptr = (char*)mBuffer + element * mStride;
-		T* pVal = (T*)ptr;
-		return pVal;
-	}
-
-	const T* mBuffer;
-	uint mElements;
-	uint mStride;
-
-private:
-
+	void ComputeNormals(bool flip = false);
 };
 
-#endif // STRIDED_VECTOR_H
+struct Face
+{
+	uint32 i, j, k;
+	int elem;
+	int face;
+
+	Face(uint32 a, uint32 b, uint32 c, int e, int f) : elem(e), face(f)
+	{
+		i = std::min(a, std::min(b, c));
+		k = std::max(a, std::max(b, c));
+		j = a + b + c - i - k;
+	}
+};
+
+inline bool CompareFaces(const Face& t1, const Face& t2)
+{
+	if (t1.i < t2.i)
+		return true;
+	if (t1.i == t2.i)
+	{
+		if (t1.j < t2.j)
+			return true;
+		if (t1.j == t2.j && t1.k < t2.k)
+			return true;
+	}
+	return false;
+}
+
+bool LoadMesh(const char* path, Mesh& collMesh, const Vector3& offset, float scale = 1, bool flipYZ = false);
+
+void BarycentricCoordinates(const Vector3& p,
+	const Vector3& a,
+	const Vector3& b,
+	const Vector3& c,
+	float& u,
+	float& v,
+	float& w);
+
+Vector3 ClosestPtPointTriangle(const Vector3& p,
+	const Vector3& a,
+	const Vector3& b,
+	const Vector3& c);
+
+void ExportMeshToOBJ(FILE* txt, const Mesh& mesh);
+
+

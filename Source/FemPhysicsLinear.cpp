@@ -45,8 +45,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace FEM_SYSTEM
 {
-	FemPhysicsLinear::FemPhysicsLinear(std::vector<Tet>& tetrahedra,
-		std::vector<Node>& nodes, const FemConfig& config)
+	FemPhysicsLinear::FemPhysicsLinear(const std::vector<Tet>& tetrahedra,
+		const std::vector<Node>& nodes, const FemConfig& config)
 		: FemPhysicsBase(config)
 		, mOrder(config.mOrder)
 		, mUseLumpedMass(true)
@@ -69,7 +69,7 @@ namespace FEM_SYSTEM
 		ComputeBodyForces(mBodyForces);
 	}
 
-	void FemPhysicsLinear::CreateMeshAndDofs(std::vector<Tet>& tetrahedra, std::vector<Node>& nodes)
+	void FemPhysicsLinear::CreateMeshAndDofs(const std::vector<Tet>& tetrahedra, const std::vector<Node>& nodes)
 	{
 #ifdef LOG_TIMES
 		Printf(("----- FemPhysicsAnyOrderCorotationalElasticity for order " + std::to_string(order) + "\n").c_str());

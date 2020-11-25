@@ -40,8 +40,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 namespace FEM_SYSTEM
 {
-	FemPhysicsLinearIncompressible::FemPhysicsLinearIncompressible(std::vector<Tet>& tetrahedra,
-		std::vector<Node>& nodes, 
+	FemPhysicsLinearIncompressible::FemPhysicsLinearIncompressible(const std::vector<Tet>& tetrahedra,
+		const std::vector<Node>& nodes, 
 		const FemConfig& config)
 		: FemPhysicsLinear(tetrahedra, nodes, config)
 		, mPressureOrder(1)

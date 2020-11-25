@@ -142,7 +142,7 @@ struct Vector3T
 
 	Real Length() const
 	{
-		return sqrt(LengthSquared());
+		return (Real)sqrt(LengthSquared());
 	}
 
 	void Normalize()

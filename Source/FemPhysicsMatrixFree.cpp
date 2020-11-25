@@ -68,8 +68,8 @@ namespace FEM_SYSTEM
 			{ 0, 1, 3 },
 			{ 0, 1, 2 } };
 
-	FemPhysicsMatrixFree::FemPhysicsMatrixFree(std::vector<Tet>& tetrahedra,
-		std::vector<Node>& allNodes, const FemConfig& config)
+	FemPhysicsMatrixFree::FemPhysicsMatrixFree(const std::vector<Tet>& tetrahedra,
+		const std::vector<Node>& allNodes, const FemConfig& config)
 		: FemPhysicsBase(config)
 		, nodes(allNodes)
 		, hasCollisions(false)

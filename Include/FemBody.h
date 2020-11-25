@@ -1,7 +1,7 @@
 /*
 BSD 3-Clause License
 
-Copyright (c) 2019, Mihai Francu
+Copyright (c) 2020, Mihai Francu
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
@@ -30,48 +30,56 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
-#ifndef STRIDED_VECTOR_H
-#define STRIDED_VECTOR_H
+#pragma once
 
-// Custom references
-#include <Engine/Types.h>
+#include "FemDataStructures.h"
+#include "MeshTools.h"
 
-
-template<class T>
-class StridedVector {
-public:
-
-	StridedVector(const T* buffer, uint elements, uint stride)
+namespace FEM_SYSTEM
+{
+	class FemBody
 	{
-		// TODO remove 'elements' as it is not really used for anything?
-		// -> The buffer might even change in size after the stridedvector has been initialized
+	public:
+		void LoadFromXml(const char* path);
+		void Prepare();
+		
+		void BuildBoundaryMesh();
+		void UpdateBoundaryMesh(class FemPhysicsBase* femPhysics);
+		void SaveBoundaryMesh(const char* path);
+		
+		bool HasVisualMesh() const { return !mVisualMesh.vertices.empty(); }
+		void LoadVisualMesh(const char* path, const Vector3& offset, float scale);
+		void MapVisualMesh();
+		void UpdateVisualMesh();
+		void SaveVisualMesh(const char* path);
 
-		// Assert that buffer is not pointing to null
-		mBuffer = buffer;
-		mElements = elements;
-		mStride = stride;
-	}
+		// non-const getters
+		FemConfig& GetConfig() { return mConfig; }
+		std::vector<Node>& GetNodes() { return mNodes; }
+		std::vector<Tet>& GetTets() { return mTets; }
+		std::vector<int>& GetFixedNodes() { return mFixedNodes; }
 
-	~StridedVector()
-	{
-		// Do nothing
-	}
+		// const getters
+		const std::vector<Node>& GetNodes() const { return mNodes; }
+		const std::vector<Tet>& GetTets() const { return mTets; }
 
-	T* GetAt(uint element)
-	{
-		// Assert that element < mElements
+	private:
+		// volumetric mesh
+		std::vector<Node> mNodes;
+		std::vector<Tet> mTets;
+		
+		// setup
+		std::vector<int> mFixedNodes;
+		FemConfig mConfig;
 
-		char* ptr = (char*)mBuffer + element * mStride;
-		T* pVal = (T*)ptr;
-		return pVal;
-	}
+		// boundary surface mesh
+		Mesh mBoundaryMesh;
+		std::vector<int> mNodesToBoundaryMap;
+		std::vector<int> mBoundaryToNodesMap;
+		std::vector<int> mBoundaryToElementsMap;
 
-	const T* mBuffer;
-	uint mElements;
-	uint mStride;
-
-private:
-
-};
-
-#endif // STRIDED_VECTOR_H
+		// visual surface mesh
+		Mesh mVisualMesh;
+		std::vector<MeshInterp> mMapData;
+	};
+}

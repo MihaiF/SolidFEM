@@ -52,9 +52,9 @@ namespace FEM_SYSTEM
 	{
 		bool LoadFromFebFile(const char* path, std::vector<Node>& nodes, std::vector<Tet>& tets,
 			std::vector<int>& fixedNodes, std::vector<uint32>& surfTris, std::set<uint32>& innerSurface, 
-			real scale, FemConfig* config = nullptr, int* bcFlag = nullptr, std::vector<uint32>* bcIndices = nullptr);
+			float scale, FemConfig* config = nullptr, int* bcFlag = nullptr, std::vector<uint32>* bcIndices = nullptr);
 		bool LoadFromXmlFile(const char* path, std::vector<Node>& nodes, std::vector<Tet>& tets,
-			std::vector<int>& fixedNodes, std::vector<uint32>& surfTris, FemConfig& config);
+			std::vector<int>& fixedNodes, std::vector<uint32>& surfTris, FemConfig& config, float& scale, std::string& visualPath);
 		bool LoadFromVolFile(const char* path, real scale, std::vector<Node>& nodes, std::vector<Tet>& tets);
 		bool LoadFromTet1File(const char* path, real scale, const Vector3R& offset, std::vector<Node>& nodes, std::vector<Tet>& tets);
 		void ExportToVTKFile(std::fstream& outfile, FemPhysicsBase* femPhysics);

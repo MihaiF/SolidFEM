@@ -31,14 +31,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <pybind11/pybind11.h>
-//TODO: use a relative path for the include dir
-#include <Include/FemPhysicsMatrixFree.h>
-#include <Include/FemPhysicsMixed.h>
-#include <Include/FemIO.h>
 #include <pybind11/iostream.h>
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
 #include <pybind11/eigen.h>
+
+#include <Include/FemBody.h>
+#include <Include/FemPhysicsMatrixFree.h>
+#include <Include/FemPhysicsMixed.h>
+#include <Include/FemIO.h>
+
 
 namespace py = pybind11;
 
@@ -51,10 +53,11 @@ class PyNonlinearFEM
 public:
 	PyNonlinearFEM(py::array_t<int> tets, py::array_t<double> nodes, py::array_t<int> fixed_nodes, py::dict config);
 	PyNonlinearFEM(py::str path);
-	void Step(real dt = DT) { mPhys->Step(dt); }
+	void Step(real dt = DT);
 	py::array_t<double> GetNodes() const;
 	py::array_t<int> GetTets() const;
 	void SaveToVTK(py::str path);
+	void SaveToOBJ(py::str path);
 	void SetLameParams(real mu, real lambda) { mPhys->SetLameParams(mu, lambda); }
 	real GetShearModulus() const { return mPhys->GetShearModulus(); }
 	real GetLameLambda() const { return mPhys->GetLameFirstParam(); }
@@ -67,6 +70,7 @@ private:
 	FemConfig ParseConfig(py::dict config);
 
 private:
+	FemBody mBody;
 	std::unique_ptr<FemPhysicsBase> mPhys;
 	FemPhysicsMatrixFree::Config mNonlinConfig;
 	FemPhysicsMixed::Config mMixedConfig;
@@ -86,7 +90,8 @@ PyNonlinearFEM::PyNonlinearFEM(py::array_t<int> tets, py::array_t<double> nodes,
 		rows = rows / 4;
 	}
 	// create the native tets
-	std::vector<Tet> nTets(rows);
+	std::vector<Tet>& nTets = mBody.GetTets();
+	nTets.resize(rows);
 	int* ptr = (int*)buf.ptr;
 	for (int i = 0; i < rows; i++)
 	{
@@ -105,7 +110,8 @@ PyNonlinearFEM::PyNonlinearFEM(py::array_t<int> tets, py::array_t<double> nodes,
 		return;
 	}
 	// create the native nodes
-	std::vector<Node> nNodes(rows);
+	std::vector<Node>& nNodes = mBody.GetNodes();
+	nNodes.resize(rows);
 	double* pNodes = (double*)buf.ptr;
 	for (int i = 0; i < rows; i++)
 	{
@@ -127,24 +133,8 @@ PyNonlinearFEM::PyNonlinearFEM(py::array_t<int> tets, py::array_t<double> nodes,
 		nNodes[idx].invMass = 0;
 	}
 
-	for (size_t i = 0; i < nTets.size(); i++)
-	{
-		Tet& tet = nTets.at(i);
-		const Vector3R& x0 = nNodes.at(tet.idx[0]).pos0;
-		const Vector3R& x1 = nNodes.at(tet.idx[1]).pos0;
-		const Vector3R& x2 = nNodes.at(tet.idx[2]).pos0;
-		const Vector3R& x3 = nNodes.at(tet.idx[3]).pos0;
-		Vector3R d1 = x1 - x0;
-		Vector3R d2 = x2 - x0;
-		Vector3R d3 = x3 - x0;
-		Matrix3R mat(d1, d2, d3); // this is the reference shape matrix Dm [Sifakis][Teran03]
-		real vol = (mat.Determinant()) / 6.f; // signed volume of the tet
-		if (vol < 0)
-		{
-			// swap the first two indices so that the volume is positive next time
-			std::swap(tet.idx[0], tet.idx[1]);
-		}
-	}
+	mBody.Prepare(); // fixed nodes are empty for now
+	mBody.BuildBoundaryMesh();
 
 	// create the FEM object
 	FemConfig nConfig = ParseConfig(config);
@@ -156,61 +146,35 @@ PyNonlinearFEM::PyNonlinearFEM(py::array_t<int> tets, py::array_t<double> nodes,
 
 PyNonlinearFEM::PyNonlinearFEM(py::str path)
 {
-	std::cout << "Running in " << GetCurrentWorkingDir() << std::endl;
+	//std::cout << "Running in " << GetCurrentWorkingDir() << std::endl;
 
 	// load the setup file
-	std::vector<Node> nodes;
-	std::vector<Tet> tets;
-	std::vector<int> fixedNodes;
-	std::vector<uint32> surfTris;
-	FemConfig config; // default config
-	IO::LoadFromXmlFile(std::string(path).c_str(), nodes, tets, fixedNodes, surfTris, config);
-
-	// FIXME
-	for (size_t i = 0; i < nodes.size(); i++)
-	{
-		nodes[i].pos0 = nodes[i].pos;
-	}
-	for (uint32 i = 0; i < fixedNodes.size(); i++)
-	{
-		int idx = fixedNodes[i];
-		nodes[idx].invMass = 0.f;
-	}
-	for (size_t i = 0; i < tets.size(); i++)
-	{
-		Tet& tet = tets.at(i);
-		const Vector3R& x0 = nodes.at(tet.idx[0]).pos0;
-		const Vector3R& x1 = nodes.at(tet.idx[1]).pos0;
-		const Vector3R& x2 = nodes.at(tet.idx[2]).pos0;
-		const Vector3R& x3 = nodes.at(tet.idx[3]).pos0;
-		Vector3R d1 = x1 - x0;
-		Vector3R d2 = x2 - x0;
-		Vector3R d3 = x3 - x0;
-		Matrix3R mat(d1, d2, d3); // this is the reference shape matrix Dm [Sifakis][Teran03]
-		real vol = (mat.Determinant()) / 6.f; // signed volume of the tet
-		if (vol < 0)
-		{
-			// swap the first two indices so that the volume is positive next time
-			std::swap(tet.idx[0], tet.idx[1]);
-		}
-	}
+	mBody.LoadFromXml(std::string(path).c_str());
 
 	// create the FEM object
 	if (!mUseMixed)
 	{
-		config.mMaterial = (MaterialModelType)MMT_NEO_HOOKEAN;
+		mBody.GetConfig().mMaterial = (MaterialModelType)MMT_NEO_HOOKEAN;
 		mNonlinConfig.mSolver = NST_NEWTON_LS;
 		mNonlinConfig.mOptimizer = true;
-		config.mCustomConfig = &mNonlinConfig;
-		mPhys.reset(new FemPhysicsMatrixFree(tets, nodes, config));
+		mBody.GetConfig().mCustomConfig = &mNonlinConfig;
+		mPhys.reset(new FemPhysicsMatrixFree(mBody.GetTets(), mBody.GetNodes(), mBody.GetConfig()));
 	}
 	else
 	{
-		config.mMaterial = (MaterialModelType)MMT_DISTORTIONAL_OGDEN;
+		mBody.GetConfig().mMaterial = (MaterialModelType)MMT_DISTORTIONAL_OGDEN;
 		mMixedConfig.mSolver = NST_NEWTON_LS;
-		config.mCustomConfig = &mMixedConfig;
-		mPhys.reset(new FemPhysicsMixed(tets, nodes, config));
+		mBody.GetConfig().mCustomConfig = &mMixedConfig;
+		mPhys.reset(new FemPhysicsMixed(mBody.GetTets(), mBody.GetNodes(), mBody.GetConfig()));
 	}
+}
+
+void PyNonlinearFEM::Step(real dt /*= DT*/)
+{
+	mPhys->Step(dt);
+	mBody.UpdateBoundaryMesh(mPhys.get());
+	if (mBody.HasVisualMesh())
+		mBody.UpdateVisualMesh();
 }
 
 py::array_t<double> PyNonlinearFEM::GetNodes() const
@@ -254,6 +218,16 @@ void PyNonlinearFEM::SaveToVTK(py::str path)
 	vtkStream.close();
 }
 
+void PyNonlinearFEM::SaveToOBJ(py::str path)
+{
+	Printf("Saving OBJ file\n");
+	std::string objPath(path);
+	if (mBody.HasVisualMesh())
+		mBody.SaveVisualMesh(objPath.c_str());
+	else
+		mBody.SaveBoundaryMesh(objPath.c_str());
+}
+
 FEM_SYSTEM::FemConfig PyNonlinearFEM::ParseConfig(py::dict config)
 {
 	FemConfig nConfig; // default config
@@ -264,6 +238,10 @@ FEM_SYSTEM::FemConfig PyNonlinearFEM::ParseConfig(py::dict config)
 	if (config.contains("poisson"))
 	{
 		nConfig.mPoissonRatio = py::cast<real>(config["poisson"]);
+	}
+	if (config.contains("density"))
+	{
+		nConfig.mDensity = py::cast<real>(config["density"]);
 	}
 	if (config.contains("simtype"))
 	{
@@ -311,9 +289,11 @@ py::tuple PyLoadFromXml(py::str path)
 	std::vector<int> fixedNodes;
 	std::vector<uint32> surfTris;
 	FemConfig config; // default config
-	IO::LoadFromXmlFile(std::string(path).c_str(), nodes, tets, fixedNodes, surfTris, config);
+	std::string visualPath;
+	float scale;
+	IO::LoadFromXmlFile(std::string(path).c_str(), nodes, tets, fixedNodes, surfTris, config, scale, visualPath);
 
-	int numNodes = nodes.size();
+	int numNodes = (int)nodes.size();
 	py::array_t<double> pyNodes = py::array_t<double>(numNodes * 3);
 	{
 		// allocate the buffer
@@ -327,7 +307,7 @@ py::tuple PyLoadFromXml(py::str path)
 		pyNodes.resize({ numNodes, 3 });
 	}
 
-	int numTets = tets.size();
+	int numTets = (int)tets.size();
 	py::array_t<int> pyTets = py::array_t<int>(numTets * 4);
 	{
 		py::buffer_info buf = pyTets.request();
@@ -353,6 +333,7 @@ PYBIND11_MODULE(pysolidfem, m) {
 		.def("step", &PyNonlinearFEM::Step, py::arg("dt") = DT)
 		.def("get_nodes", &PyNonlinearFEM::GetNodes)
 		.def("save_to_vtk", &PyNonlinearFEM::SaveToVTK)
+		.def("save_to_obj", &PyNonlinearFEM::SaveToOBJ)
 		.def("set_lame_params", &PyNonlinearFEM::SetLameParams)
 		.def("get_shear_modulus", &PyNonlinearFEM::GetShearModulus)
 		.def("get_lame_lambda", &PyNonlinearFEM::GetLameLambda)

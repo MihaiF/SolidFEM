@@ -31,6 +31,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
 
 #include <iostream>
+#include <Include/FemBody.h>
 #include <Include/FemIO.h>
 #include <Include/FemPhysicsMatrixFree.h>
 #include <Include/FemPhysicsMixed.h>
@@ -51,7 +52,7 @@ int main(int argc, char* argv[], char* envp[])
 	// init a default config
 	int numSteps = 10;
 	bool noLineSearch = false;
-	double scale = 1;
+	float scale = 1;
 	bool optimizer = false;
 
 	FemConfig femConfig;
@@ -83,25 +84,28 @@ int main(int argc, char* argv[], char* envp[])
 	}
 
 	// load the mesh+BCs+config from a FEB file
-	std::vector<Node> nodes;
-    std::vector<Tet> tets;
-    std::vector<int> fixedNodes;
+	FemBody body;
     std::vector<uint32> surfTris;
-    std::set<uint32> innerSurface;
 	std::vector<uint32> bcIndices;
 	int bcFlag;
+	std::string visualPath;
 	Printf("Loading %s...\n", argv[1]);
 	size_t len = strlen(argv[1]);
 	bool ret = false;
 	if (argv[1][len - 3] == 'f' && argv[1][len - 2] == 'e' && argv[1][len - 1] == 'b')
-		ret = IO::LoadFromFebFile(argv[1], nodes, tets, fixedNodes, surfTris, innerSurface, scale, &femConfig, &bcFlag, &bcIndices);
+	{
+		std::set<uint32> innerSurface;
+		ret = IO::LoadFromFebFile(argv[1], body.GetNodes(), body.GetTets(), body.GetFixedNodes(), surfTris, innerSurface, scale, &femConfig, &bcFlag, &bcIndices);
+	}
 	else
-		ret = IO::LoadFromXmlFile(argv[1], nodes, tets, fixedNodes, surfTris, femConfig);
+	{
+		ret = IO::LoadFromXmlFile(argv[1], body.GetNodes(), body.GetTets(), body.GetFixedNodes(), surfTris, femConfig, scale, visualPath);
+	}
 	if (ret)
     {
-        Printf("Num nodes: %d\n", nodes.size());
-        Printf("Num tets: %d\n", tets.size());
-		Printf("Num fixed: %d\n", fixedNodes.size());
+        Printf("Num nodes: %d\n", body.GetNodes().size());
+        Printf("Num tets: %d\n", body.GetTets().size());
+		Printf("Num fixed: %d\n", body.GetFixedNodes().size());
     }
     else
     {
@@ -111,28 +115,11 @@ int main(int argc, char* argv[], char* envp[])
 
 	numSteps = (int)ceil(1.0 / femConfig.mForceApplicationStep);
 
-	// FIXME
-	for (size_t i = 0; i < nodes.size(); i++)
+	body.Prepare();
+	body.BuildBoundaryMesh();
+	if (!visualPath.empty())
 	{
-		nodes[i].pos0 = nodes[i].pos;
-	}
-	for (size_t i = 0; i < tets.size(); i++)
-	{
-		Tet& tet = tets.at(i);
-		const Vector3R& x0 = nodes.at(tet.idx[0]).pos0;
-		const Vector3R& x1 = nodes.at(tet.idx[1]).pos0;
-		const Vector3R& x2 = nodes.at(tet.idx[2]).pos0;
-		const Vector3R& x3 = nodes.at(tet.idx[3]).pos0;
-		Vector3R d1 = x1 - x0;
-		Vector3R d2 = x2 - x0;
-		Vector3R d3 = x3 - x0;
-		Matrix3R mat(d1, d2, d3); // this is the reference shape matrix Dm [Sifakis][Teran03]
-		real vol = (mat.Determinant()) / 6.f; // signed volume of the tet
-		if (vol < 0)
-		{
-			// swap the first two indices so that the volume is positive next time
-			std::swap(tet.idx[0], tet.idx[1]);
-		}
+		body.LoadVisualMesh(visualPath.c_str(), Vector3(), scale);
 	}
 
 	// override or set properties from the command line
@@ -212,12 +199,6 @@ int main(int argc, char* argv[], char* envp[])
 	std::string outPath = name + ".txt";
 	fopen_s(&out, outPath.c_str(), "wt");
 
-	for (uint32 i = 0; i < fixedNodes.size(); i++)
-    {
-        int idx = fixedNodes[i];
-        nodes[idx].invMass = 0.f;
-    }
-
 	Printf("Constructing simulator...\n");
 	FemPhysicsBase* femPhysics = nullptr;
 	FemPhysicsMatrixFree::Config nonlinConfig;
@@ -230,7 +211,7 @@ int main(int argc, char* argv[], char* envp[])
 		nonlinConfig.mOptimizer = optimizer;
 		femConfig.mCustomConfig = &nonlinConfig;
 
-		femPhysics = new FemPhysicsMatrixFree(tets, nodes, femConfig);
+		femPhysics = new FemPhysicsMatrixFree(body.GetTets(), body.GetNodes(), femConfig);
 	}
 	else if (femConfig.mType == MT_INCOMPRESSIBLE_NONLINEAR_ELASTICITY)
 	{
@@ -241,7 +222,7 @@ int main(int argc, char* argv[], char* envp[])
 		mixedConfig.mConstraintScale = 1;
 		//mixedConfig.mPressureOrder = 0;
 		femConfig.mCustomConfig = &mixedConfig;
-		femPhysics = new FemPhysicsMixed(tets, nodes, femConfig);
+		femPhysics = new FemPhysicsMixed(body.GetTets(), body.GetNodes(), femConfig);
 	}
 
 	// add dynamic BCs
@@ -273,7 +254,13 @@ int main(int argc, char* argv[], char* envp[])
     {
 		Printf("Step %d\n", i + 1);
         femPhysics->Step(0);
+		body.UpdateBoundaryMesh(femPhysics);
+		if (!visualPath.empty())
+			body.UpdateVisualMesh();
     }
+	body.SaveBoundaryMesh("boundary.obj");
+	if (!visualPath.empty())
+		body.SaveVisualMesh("visual.obj");
 
 	Printf("Saving VTK file\n");
 	std::fstream vtkStream;

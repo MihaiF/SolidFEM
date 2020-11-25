@@ -58,8 +58,8 @@ namespace FEM_SYSTEM
 			};
 
 		public:
-			FemPhysicsMatrixFree(std::vector<Tet>& tetrahedra,
-				std::vector<Node>& allNodes, const FemConfig& config);
+			FemPhysicsMatrixFree(const std::vector<Tet>& tetrahedra,
+				const std::vector<Node>& allNodes, const FemConfig& config);
 
 			void Step(real dt) override;
 			
