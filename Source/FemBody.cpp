@@ -185,8 +185,7 @@ namespace FEM_SYSTEM
 		std::vector<Vector3> vertices;
 		mNodesToBoundaryMap.resize(mNodes.size());
 		std::fill(mNodesToBoundaryMap.begin(), mNodesToBoundaryMap.end(), -1);
-		mBoundaryToNodesMap.resize(boundaryVertices.size());
-		std::fill(mBoundaryToNodesMap.begin(), mBoundaryToNodesMap.end(), -1);
+		mBoundaryToNodesMap.clear();
 		for (size_t i = 0; i < boundaryVertices.size(); i++)
 		{
 			if (i > 0 && boundaryVertices[i] == boundaryVertices[i - 1])
@@ -194,7 +193,7 @@ namespace FEM_SYSTEM
 			vertices.push_back(DoubleToFloat(mNodes[boundaryVertices[i]].pos));
 			int idx = (int)vertices.size() - 1;
 			mNodesToBoundaryMap[boundaryVertices[i]] = idx;
-			mBoundaryToNodesMap[idx] = boundaryVertices[i];
+			mBoundaryToNodesMap.push_back(boundaryVertices[i]);
 		}
 
 		// generate mesh

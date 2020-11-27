@@ -158,17 +158,21 @@ def test_cantilever_static():
 
     # load the box
     verts, indices = read_tetfile('../Models/box2.tet')
-    fixed2 = [0, 1, 2, 3, 4, 5, 6, 7, 8]
+    fixed = [0, 1, 2, 3, 4, 5, 6, 7, 8]
+    #all = range(0, verts.shape[0])
+    #free = np.setdiff1d(all, fixed)
+    #print('free: ', free)
+
     num_steps = 10
 
     # Python simulator
-    sim = Simulator(verts, indices, fixed2, config)
+    sim = Simulator(verts, indices, fixed, config)
     #sim.solve_scipy()
     #sim.solve_conj_grad(400)
     #print(sim.nodes[-1])
 
     # C++ simulator
-    simC = psf.NonlinearFEM(indices, verts, fixed2, config)
+    simC = psf.NonlinearFEM(indices, verts, fixed, config)
     #simC = psf.NonlinearFEM('cantilever.xml')
     nodes2 = simC.get_nodes()
     simC.step()
@@ -177,25 +181,24 @@ def test_cantilever_static():
     simC.save_to_obj('cantilever.obj')
     print(nodes2[-1])
     plot_nodes(nodes2)
-    V, F = simC.get_boundary_mesh()
-    print(V)
-    print(F)
+
+    V, F, boundary = simC.get_boundary_mesh()
+    target_set = np.intersect1d(sim.free, boundary)
+    print(target_set)
+    target_setf = target_set - len(fixed)
 
     # parameter estimation
-    target = nodes2
+    target = nodes2[target_set]
 
     def inverse_objective(x):
         mu = x[0]
         la = x[1]
-        #rho = x[2]
-        #print("loss: ", mu, la)
         config["young"] = mu * (3.0 * la + 2.0 * mu) / (mu + la)
         config["poisson"] = 0.5 * la / (la + mu)
-        #config["density"] = rho
-        simC = psf.NonlinearFEM(indices, verts, fixed2, config)
+        simC = psf.NonlinearFEM(indices, verts, fixed, config)
         simC.step()
         nodesC = simC.get_nodes()
-        delta = (nodesC - target).flatten()
+        delta = (nodesC[target_set] - target).flatten()
         error = 0.5 * np.dot(delta, delta)
         return error
 
@@ -203,37 +206,52 @@ def test_cantilever_static():
     def jacobian(x):
         mu = x[0]
         la = x[1]
-        #rho = x[2]
-        print("jac: ", mu, la)
         config["young"] = mu * (3.0 * la + 2.0 * mu) / (mu + la)
         config["poisson"] = 0.5 * la / (la + mu)
-        #config["density"] = rho
-        simC = psf.NonlinearFEM(indices, verts, fixed2, config)
+        simC = psf.NonlinearFEM(indices, verts, fixed, config)
         simC.step() # simulate with current positions and params
         nodesC = simC.get_nodes()
-        delta = (nodesC - target).flatten()
+        delta = (nodesC[target_set] - target).flatten()
         H = simC.get_hessian()
         simC.compute_force_param_grads()
         f_mu = simC.get_force_mu_grad()
         f_lambda = simC.get_force_lambda_grad()
-        #f_rho = simC.get_force_rho_grad()
-        grad = np.linalg.solve(H, np.column_stack((f_mu, f_lambda)))#, f_rho)))
-        J = np.matmul(np.transpose(grad), delta[9 * 3:])
+        grad = np.linalg.solve(H, np.column_stack((f_mu, f_lambda)))
+        grad_mu = grad[:,0].reshape(-1, 3)[target_setf].flatten()
+        grad_la = grad[:,1].reshape(-1, 3)[target_setf].flatten()
+        grad_restricted = np.column_stack((grad_mu, grad_la))
+        J = np.matmul(np.transpose(grad_restricted), delta)
         return J
 
     def residual(x):
         mu = x[0]
         la = x[1]
-        print(mu, la)
         config["young"] = mu * (3.0 * la + 2.0 * mu) / (mu + la)
         config["poisson"] = 0.5 * la / (la + mu)
-        simC = psf.NonlinearFEM(indices, verts, fixed2, config)
-        #simC = psf.NonlinearFEM('cantilever.xml')
-        #simC.set_lame_params(mu, la)
+        simC = psf.NonlinearFEM(indices, verts, fixed, config)
         simC.step() # simulate with current positions and params
         nodesC = simC.get_nodes()
-        delta = (nodesC - target).flatten()
+        delta = (nodesC[target_set] - target).flatten()
         return delta
+
+    def res_jac(x):
+        mu = x[0]
+        la = x[1]
+        config["young"] = mu * (3.0 * la + 2.0 * mu) / (mu + la)
+        config["poisson"] = 0.5 * la / (la + mu)
+        simC = psf.NonlinearFEM(indices, verts, fixed, config)
+        simC.step() # simulate with current positions and params
+        nodesC = simC.get_nodes()
+        delta = (nodesC[target_set] - target).flatten()
+        H = simC.get_hessian()
+        simC.compute_force_param_grads()
+        f_mu = simC.get_force_mu_grad()
+        f_lambda = simC.get_force_lambda_grad()
+        grad = np.linalg.solve(H, np.column_stack((f_mu, f_lambda)))
+        grad_mu = grad[:,0].reshape(-1, 3)[target_setf].flatten()
+        grad_la = grad[:,1].reshape(-1, 3)[target_setf].flatten()
+        grad_restricted = np.column_stack((grad_mu, grad_la))
+        return grad_restricted
 
     # plot the loss function w.r.t. mu
     #mu_min = 10000
@@ -265,17 +283,16 @@ def test_cantilever_static():
 
     mu = 20000;
     la = 200000;
-    #rho = 1050
-    x0 = [mu, la]#, rho]
+    x0 = [mu, la]
     #sol = minimize(inverse_objective, x0, method='Nelder-Mead')
-    sol = minimize(inverse_objective, x0, method="BFGS", jac=jacobian, options={'gtol': 1e-12})
-    #sol = opt.least_squares(residual, x0, method='dogbox')
+    #sol = minimize(inverse_objective, x0, method='Powell')
+    #sol = minimize(inverse_objective, x0, method="BFGS", options={'gtol': 1e-12}, jac=jacobian)
+    sol = opt.least_squares(residual, x0, method='lm', gtol=1e-12, jac=res_jac)
     #sol = opt.dual_annealing(inverse_objective, bounds=((10000, 30000), (200000, 210000)))
     print(sol)
     mu = sol.x[0]
     la = sol.x[1]
-    #rho = sol.x[2]
-    print(mu, la)#, rho)
+    print(mu, la)
     print(sim.mu, sim.la)
 
     # Python torch simulator
