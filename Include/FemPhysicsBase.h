@@ -130,9 +130,9 @@ namespace FEM_SYSTEM
 
 		FemCollision* GetCollision() { return mFemCollision; }
 
-		SparseMatrix GetHessian() const { return mHessian; }
+		const SparseMatrix& GetHessian() const { return mHessian; }
 
-		void GetForceParamGrads(EigenVector& gradMu, EigenVector& gradLambda, EigenVector& gradRho);
+		virtual void GetForceParamGrads(EigenVector& gradMu, EigenVector& gradLambda, EigenVector& gradRho);
 		
 		virtual void AddCable(const std::vector<SpringNode>& cable, const Vector3Array& pos, real restLength, real stiffness, real damping, real actuation);
 		uint32 GetNumCables() const { return (uint32)mCables.size(); }

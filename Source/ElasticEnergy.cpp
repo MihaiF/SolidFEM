@@ -113,6 +113,9 @@ namespace FEM_SYSTEM
 
 	Matrix3R ElasticEnergy::ComputeElementStress(const FemPhysicsBase* femPhysics, uint32 e, Matrix3R& Pmu, Matrix3R& Plambda, bool update, int material)
 	{
+		Plambda = Matrix3R::Zero();
+		Pmu = Matrix3R::Zero();
+
 		Matrix3R id;
 		const real mu = femPhysics->GetShearModulus();
 		const real lambda = femPhysics->GetLameFirstParam();
@@ -238,7 +241,8 @@ namespace FEM_SYSTEM
 			// ver 5: only the mu terms [Smith]->[Ogden]
 			Matrix3R Finv = F.GetInverse();
 			Matrix3R Finvtr = !Finv;
-			piolae = mu * (F - Finvtr);
+			Pmu = F - Finvtr;
+			piolae = mu * Pmu;
 		}
 		else if (material == MMT_DISTORTIONAL_NH6)
 		{

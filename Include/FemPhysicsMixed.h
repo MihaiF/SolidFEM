@@ -47,6 +47,8 @@ namespace FEM_SYSTEM
 
 		void Step(real dt) override;
 
+		void GetForceParamGrads(EigenVector& gradMu, EigenVector& gradLambda, EigenVector& gradRho) override;
+
 	private:
 		void SolveSaddlePoint();
 		void SolveSaddlePointLS();
@@ -68,12 +70,16 @@ namespace FEM_SYSTEM
 			return 0;
 		}
 
+		void ComputeForceLambdaGrad(EigenVector& flambda);
+
 	private:
 		real mTimeStep;
 		EigenVector mContactMultipliers, mContactDepth;
 		bool mCondenseContact = false;
 		real mStepLength;
 		EigenVector mVolStretches;
+
+		EigenMatrix mCinv;
 
 		friend class SaddlePointProblem;
 	};

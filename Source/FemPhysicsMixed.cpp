@@ -152,6 +152,10 @@ namespace FEM_SYSTEM
 				mVelocities[i] = invH * (mDeformedPositions[i] - mPreviousPositions[i]);
 			}
 		}
+
+		EigenMatrix C(mVolComplianceMatrix);
+		mCinv = C.inverse();
+		mHessian = mDeviatoricStiffnessMatrix + mGeometricStiffnessMatrix + mVolJacobianMatrix.transpose() * mCinv * mVolJacobianMatrix;
 	}
 
 	void FemPhysicsMixed::SolveSaddlePointLS()
@@ -218,6 +222,10 @@ namespace FEM_SYSTEM
 				mVelocities[i] = invH * (mDeformedPositions[i] - mPreviousPositions[i]);
 			}
 		}
+
+		EigenMatrix C(mVolComplianceMatrix);
+		mCinv = C.inverse();
+		mHessian = mDeviatoricStiffnessMatrix + mGeometricStiffnessMatrix + mVolJacobianMatrix.transpose() * mCinv * mVolJacobianMatrix;
 	}
 
 	real FemPhysicsMixed::GetCurrentVolumeErrors(EigenVector& errors, bool verbose)
@@ -569,4 +577,23 @@ namespace FEM_SYSTEM
 		}
 	}
 
+	void FemPhysicsMixed::ComputeForceLambdaGrad(EigenVector& flambda)
+	{
+		// compute the volumetric force
+		//EigenVector err(GetNumPressureNodes());
+		//GetCurrentVolumeErrors(err);
+		//auto p = mCinv * err;
+		Eigen::Map<EigenVector> p((real*)&mPressures[0], mPressures.size(), 1);
+		auto f = -mVolJacobianMatrix.transpose() * p;
+		flambda = (1.0 / GetLameFirstParam()) * f;
+	}
+
+	void FemPhysicsMixed::GetForceParamGrads(EigenVector& gradMu, EigenVector& gradLambda, EigenVector& gradRho)
+	{
+		FemPhysicsBase::GetForceParamGrads(gradMu, gradLambda, gradRho);
+		
+		EigenVector flambda;
+		ComputeForceLambdaGrad(flambda);
+		gradLambda += flambda;
+	}
 } // namespace FEM_SYSTEM

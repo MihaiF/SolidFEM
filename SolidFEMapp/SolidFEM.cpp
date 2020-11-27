@@ -262,6 +262,10 @@ int main(int argc, char* argv[], char* envp[])
 	if (!visualPath.empty())
 		body.SaveVisualMesh("visual.obj");
 
+	// test the gradient w.r.t. parameters
+	EigenVector g1, g2, g3;
+	femPhysics->GetForceParamGrads(g1, g2, g3);
+
 	Printf("Saving VTK file\n");
 	std::fstream vtkStream;
 	std::string vtkPath = name + ".vtk";
