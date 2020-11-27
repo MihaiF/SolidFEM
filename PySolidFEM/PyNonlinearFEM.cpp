@@ -167,7 +167,8 @@ py::tuple PyNonlinearFEM::GetBoundaryMesh() const
 	}
 
 	py::list pyFaces = py::cast(mesh.indices);
-	return py::make_tuple(pyVerts, pyFaces);
+	py::list pyNodes = py::cast(mBody.GetBoundaryNodes());
+	return py::make_tuple(pyVerts, pyFaces, pyNodes);
 }
 
 FEM_SYSTEM::FemConfig PyNonlinearFEM::ParseConfig(py::dict config)

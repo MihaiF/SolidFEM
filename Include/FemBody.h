@@ -63,6 +63,7 @@ namespace FEM_SYSTEM
 		const std::vector<Node>& GetNodes() const { return mNodes; }
 		const std::vector<Tet>& GetTets() const { return mTets; }
 		const Mesh& GetBoundaryMesh() const { return mBoundaryMesh; }
+		const std::vector<int>& GetBoundaryNodes() const { return mBoundaryToNodesMap; }
 
 	private:
 		// volumetric mesh
