@@ -67,10 +67,35 @@ PyNonlinearFEM::PyNonlinearFEM(py::array_t<int> tets, py::array_t<double> nodes,
 
 PyNonlinearFEM::PyNonlinearFEM(py::str path)
 {
-	//std::cout << "Running in " << GetCurrentWorkingDir() << std::endl;
-
 	// load the setup file
 	mBody.LoadFromXml(std::string(path).c_str());
+
+	// create the FEM object
+	if (!mUseMixed)
+	{
+		mBody.GetConfig().mMaterial = (MaterialModelType)MMT_NEO_HOOKEAN;
+		mNonlinConfig.mSolver = NST_NEWTON_LS;
+		mNonlinConfig.mOptimizer = true;
+		mBody.GetConfig().mCustomConfig = &mNonlinConfig;
+		mPhys.reset(new FemPhysicsMatrixFree(mBody.GetTets(), mBody.GetNodes(), mBody.GetConfig()));
+	}
+	else
+	{
+		mBody.GetConfig().mMaterial = (MaterialModelType)MMT_DISTORTIONAL_OGDEN;
+		mMixedConfig.mSolver = NST_NEWTON_LS;
+		mBody.GetConfig().mCustomConfig = &mMixedConfig;
+		mPhys.reset(new FemPhysicsMixed(mBody.GetTets(), mBody.GetNodes(), mBody.GetConfig()));
+	}
+}
+
+PyNonlinearFEM::PyNonlinearFEM(py::str path, py::dict config)
+{
+	// load the setup file
+	mBody.LoadFromXml(std::string(path).c_str());
+
+	// override the config
+	FemConfig nConfig = ParseConfig(config);
+	mBody.SetConfig(nConfig);
 
 	// create the FEM object
 	if (!mUseMixed)
@@ -152,6 +177,28 @@ void PyNonlinearFEM::SaveToOBJ(py::str path)
 py::tuple PyNonlinearFEM::GetBoundaryMesh() const
 {
 	const Mesh& mesh = mBody.GetBoundaryMesh();
+	int numVerts = (int)mesh.vertices.size();
+	py::array_t<double> pyVerts = py::array_t<double>(numVerts * 3);
+	{
+		// allocate the buffer
+		py::buffer_info buf = pyVerts.request();
+		double* ptr = (double*)buf.ptr;
+		for (int i = 0; i < numVerts; i++)
+		{
+			for (int j = 0; j < 3; j++)
+				ptr[i * 3 + j] = mesh.vertices[i][j];
+		}
+		pyVerts.resize({ numVerts, 3 });
+	}
+
+	py::list pyFaces = py::cast(mesh.indices);
+	py::list pyNodes = py::cast(mBody.GetBoundaryNodes());
+	return py::make_tuple(pyVerts, pyFaces, pyNodes);
+}
+
+py::tuple PyNonlinearFEM::GetVisualMesh() const
+{
+	const Mesh& mesh = mBody.GetVisualMesh();
 	int numVerts = (int)mesh.vertices.size();
 	py::array_t<double> pyVerts = py::array_t<double>(numVerts * 3);
 	{

@@ -54,6 +54,7 @@ class PyNonlinearFEM
 public:
 	PyNonlinearFEM(py::array_t<int> tets, py::array_t<double> nodes, py::array_t<int> fixed_nodes, py::dict config);
 	PyNonlinearFEM(py::str path);
+	PyNonlinearFEM(py::str path, py::dict config);
 	void Step(real dt = DT);
 	py::array_t<double> GetNodes() const;
 	py::array_t<int> GetTets() const;
@@ -68,6 +69,7 @@ public:
 	EigenVector GetForceLambdaGrad() const { return mForceGradLambda; }
 	EigenVector GetForceRhoGrad() const { return mForceGradLambda; }
 	py::tuple GetBoundaryMesh() const;
+	py::tuple GetVisualMesh() const;
 
 private:
 	FemConfig ParseConfig(py::dict config);

@@ -56,9 +56,8 @@ namespace FEM_SYSTEM
 
 	void FemBody::LoadVisualMesh(const char* path, const Vector3& offset, float scale)
 	{
-		bool ret = LoadMesh(path, mVisualMesh, offset, scale);
-		if (ret)
-			MapVisualMesh();
+		ImportMeshFromOBJ(path, mVisualMesh, scale);
+		MapVisualMesh();
 	}
 
 	void FemBody::MapVisualMesh()

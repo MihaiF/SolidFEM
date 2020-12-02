@@ -38,6 +38,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <assimp/scene.h>          // Output data structure
 #include <assimp/postprocess.h>    // Post processing flags
 
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <regex>
+
 void BarycentricCoordinates(const Vector3& p,
 	const Vector3& a,
 	const Vector3& b,
@@ -183,7 +188,7 @@ void CreateCollisionMesh(const struct aiScene* sc, const struct aiNode* nd, Mesh
 
 bool LoadMesh(const char* path, Mesh& collMesh, const Vector3& offset, float scale, bool flipYZ)
 {
-	const aiScene* scene = aiImportFile(path, aiProcessPreset_TargetRealtime_MaxQuality);
+	const aiScene* scene = aiImportFile(path, 0);
 	if (scene == NULL)
 		return false;
 	collMesh.indices.clear();
@@ -218,6 +223,56 @@ void ExportMeshToOBJ(FILE* txt, const Mesh& mesh)
 	for (size_t j = 0; j < mesh.indices.size(); j += 3)
 	{
 		fprintf(txt, "f %d//%d %d//%d %d//%d\n", mesh.indices[j] + 1, mesh.indices[j] + 1, mesh.indices[j + 1] + 1, mesh.indices[j + 1] + 1, mesh.indices[j + 2] + 1, mesh.indices[j + 2] + 1);
+	}
+}
+
+void ImportMeshFromOBJ(const char* path, Mesh& mesh, float scale)
+{
+	mesh.vertices.clear();
+	mesh.normals.clear();
+	mesh.indices.clear();
+
+	std::ifstream file(path);
+	std::string str;
+	while (std::getline(file, str)) 
+	{
+		// Regex for tokenizing whitespaces
+		std::regex reg("\\s+");
+		// Get an iterator after filtering through the regex
+		std::sregex_token_iterator iter(str.begin(), str.end(), reg, -1);
+		// Keep a dummy end iterator - Needed to construct a vector  using (start, end) iterators.
+		std::sregex_token_iterator end;
+		std::vector<std::string> tokens(iter, end);
+		//for (auto a : tokens)
+		//{
+		//	std::cout << a << std::endl;
+		//}
+
+		if (tokens[0].compare("v") == 0)
+		{
+			float x = std::stof(tokens[1]);
+			float y = std::stof(tokens[2]);
+			float z = std::stof(tokens[3]);
+			mesh.vertices.push_back(scale * Vector3(x, y, z));
+		}
+
+		if (tokens[0].compare("vn") == 0)
+		{
+			float x = std::stof(tokens[1]);
+			float y = std::stof(tokens[2]);
+			float z = std::stof(tokens[3]);
+			mesh.normals.push_back(Vector3(x, y, z));
+		}
+		
+		if (tokens[0].compare("f") == 0)
+		{
+			int i = std::stoi(tokens[1]);
+			int j = std::stoi(tokens[2]);
+			int k = std::stoi(tokens[3]);
+			mesh.indices.push_back(i - 1);
+			mesh.indices.push_back(j - 1);
+			mesh.indices.push_back(k - 1);
+		}
 	}
 }
 

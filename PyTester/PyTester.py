@@ -7,7 +7,7 @@ import scipy.optimize as opt
 from mpl_toolkits.mplot3d import Axes3D
 from Simulator import Simulator
 from TorchSimulator import TorchSimulator
-from utils import read_tetfile
+from utils import read_tetfile, read_objfile
 
 from scipy.optimize import minimize
 
@@ -302,45 +302,95 @@ def test_cantilever_static():
 
 def test_hammerbot():
     config = {
-        "young": 66000,
-        "poisson": 0.45,
+        "young": 90000,
+        "poisson": 0.4999,
         "simtype": 0,
         "substeps": 10,
         'maxiter': 100,
+        "mixed" : True,
+        'tol': 0.01,
     }
+
+    #mu = 17421.6
+    #la = 5.38971e10
+    #mu = 22934.3
+    #la = 227048.6
+    #config["young"] = mu * (3.0 * la + 2.0 * mu) / (mu + la)
+    #config["poisson"] = 0.5 * la / (la + mu)
+    #print(config)
 
     # create the simulator from file
     path = '../Models/hammerbot.xml'
-    fem = psf.NonlinearFEM(path)
+    fem = psf.NonlinearFEM(path, config)
     fem.step()
     nodes = fem.get_nodes()
     fem.save_to_vtk("../Models/hammerbot.vtk")
     fem.save_to_obj('hammerbot.obj')
     
+    N, T, F = psf.load_from_xml(path)
+    #print(N)
+    hammerbot = Simulator(N, T.flatten(), F, config)
+    #nodes4 = hammerbot.step()
+    #plot_nodes(nodes4)
+
     # parameter estimation
+    #target_set = range(0, nodes.shape[0])
+    #print(target_set)
+
+    V, F, boundary = fem.get_visual_mesh()
+    #target = V
+    V1, F1 = read_objfile("../Models/hammer_target.obj")
+    target = 0.01 * V1
     #target = nodes
 
-    #def inverse_objective(x):
+    def inverse_objective(x):
+        mu = x[0]
+        la = x[1]
+        config["young"] = mu * (3.0 * la + 2.0 * mu) / (mu + la)
+        config["poisson"] = 0.5 * la / (la + mu)
+        simC = psf.NonlinearFEM(path, config)
+        simC.step() # simulate with current positions and params
+        V, _, _ = simC.get_visual_mesh()
+        delta = (V - target).flatten()
+        error = np.dot(delta, delta)
+        #print('err {:E}'.format(error))
+        return error
+
+    #def residual(x):
     #    mu = x[0]
     #    la = x[1]
-    #    print(mu, la)
-    #    simC = psf.NonlinearFEM(path)
-    #    simC.set_lame_params(mu, la)
+    #    config["young"] = mu * (3.0 * la + 2.0 * mu) / (mu + la)
+    #    config["poisson"] = 0.5 * la / (la + mu)
+    #    simC = psf.NonlinearFEM(path, config)
     #    simC.step() # simulate with current positions and params
     #    nodesC = simC.get_nodes()
     #    delta = (nodesC - target).flatten()
-    #    error = np.dot(delta, delta)
-    #    print('err {:E}'.format(error))
-    #    return error
+    #    return delta
 
-    #mu = 30000;
-    #la = 120000;
-    #x0 = [mu, la]
-    #sol = minimize(inverse_objective, x0, method='Nelder-Mead')
-    #print(sol.message)
-    #mu = sol.x[0]
-    #la = sol.x[1]
-    #print(mu, la)      
+    #def res_jac(x):
+    #    mu = x[0]
+    #    la = x[1]
+    #    config["young"] = mu * (3.0 * la + 2.0 * mu) / (mu + la)
+    #    config["poisson"] = 0.5 * la / (la + mu)
+    #    simC = psf.NonlinearFEM(path, config)
+    #    simC.step() # simulate with current positions and params
+    #    nodesC = simC.get_nodes()
+    #    H = simC.get_hessian()
+    #    simC.compute_force_param_grads()
+    #    f_mu = simC.get_force_mu_grad()
+    #    f_lambda = simC.get_force_lambda_grad()
+    #    grad = np.linalg.solve(H, np.column_stack((f_mu, f_lambda)))
+    #    return grad
+
+    mu = 20000;
+    la = 1e7;
+    x0 = [mu, la]
+    sol = minimize(inverse_objective, x0, method='Nelder-Mead')
+    #sol = opt.least_squares(residual, x0, method='dogbox', gtol=1e-12, xtol=None, ftol=None) #, jac=res_jac)
+    print(sol.message)
+    mu = sol.x[0]
+    la = sol.x[1]
+    print(mu, la)      
 
     # plot the loss function w.r.t. mu
     #mu_min = 10000
@@ -377,16 +427,11 @@ def test_hammerbot():
     #sim2.solve_grad_desc(2e-4, 70000, 1e-15, 0.1)
     #plot_nodes(sim2.nodes)
 
-    #N, T, F = psf.load_from_xml('hammerbot.xml')
-    #print(N)
-    #hammerbot = Simulator(N, T.flatten(), F, config)
-    #nodes4 = hammerbot.step()
-    #plot_nodes(nodes4)
 
 torch.set_printoptions(precision=8)
 #test_tetrahedron_static()
-test_cantilever_static()
-#test_hammerbot()
+#test_cantilever_static()
+test_hammerbot()
 
 # explicit integration
 #fem = psf.NonlinearFEM('hammerbot_explicit.xml')

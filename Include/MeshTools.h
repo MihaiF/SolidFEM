@@ -111,4 +111,6 @@ Vector3 ClosestPtPointTriangle(const Vector3& p,
 
 void ExportMeshToOBJ(FILE* txt, const Mesh& mesh);
 
+void ImportMeshFromOBJ(const char* path, Mesh& mesh, float scale = 1);
+
 
