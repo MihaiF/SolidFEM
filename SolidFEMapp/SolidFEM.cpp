@@ -89,6 +89,7 @@ int main(int argc, char* argv[], char* envp[])
 	std::vector<uint32> bcIndices;
 	int bcFlag;
 	std::string visualPath;
+	std::vector<CableDescriptor> cables;
 	Printf("Loading %s...\n", argv[1]);
 	size_t len = strlen(argv[1]);
 	bool ret = false;
@@ -99,7 +100,7 @@ int main(int argc, char* argv[], char* envp[])
 	}
 	else
 	{
-		ret = IO::LoadFromXmlFile(argv[1], body.GetNodes(), body.GetTets(), body.GetFixedNodes(), surfTris, femConfig, scale, visualPath);
+		ret = IO::LoadFromXmlFile(argv[1], body.GetNodes(), body.GetTets(), body.GetFixedNodes(), surfTris, femConfig, scale, visualPath, cables);
 	}
 	if (ret)
     {
@@ -229,6 +230,11 @@ int main(int argc, char* argv[], char* envp[])
 	for (size_t i = 0; i < bcIndices.size(); i++)
 	{
 		femPhysics->AddDirichletBC(bcIndices[i], bcFlag);
+	}
+
+	for (CableDescriptor& desc : cables)
+	{
+		CreateCable(desc, body.GetNodes(), body.GetTets(), femPhysics);
 	}
 
 	Printf("FEM Config:\n");

@@ -48,13 +48,6 @@ namespace FEM_SYSTEM
 			AXIS_Z = 4,
 		};
 
-		struct Cable
-		{
-			std::vector<SpringNode> mCableNodes;
-			Vector3Array mCablePositions;
-			real mActuation = 1.0;
-		};
-
 	public:
 		FemPhysicsBase(const FemConfig& config);
 		virtual ~FemPhysicsBase() {}
@@ -134,8 +127,9 @@ namespace FEM_SYSTEM
 
 		virtual void GetForceParamGrads(EigenVector& gradMu, EigenVector& gradLambda, EigenVector& gradRho);
 		
-		virtual void AddCable(const std::vector<SpringNode>& cable, const Vector3Array& pos, real restLength, real stiffness, real damping, real actuation);
+		virtual void AddCable(const Cable& cable);
 		uint32 GetNumCables() const { return (uint32)mCables.size(); }
+		const Cable& GetCable(uint32 i) const { return mCables[i]; }
 		const Vector3R& GetCablePosition(uint32 cable, uint32 node) const { return mCables[cable].mCablePositions[node]; }
 		void SetCableActuation(uint32 cable, real actuation) { mCables[cable].mActuation = actuation; }
 		void ComputeSpringForces(Cable& cable, std::vector<Vector3R>& femForces);
@@ -206,9 +200,6 @@ namespace FEM_SYSTEM
 		SparseMatrix mHessian;
 		
 		std::vector<Cable> mCables;
-		real mCableRestLength;
-		real mCableStiffness = 1000;
-		real mCableDamping = 0;
 
 		std::vector<Matrix3R> mDefGrads;
 		std::vector<Matrix3R> mDefGradsInv;

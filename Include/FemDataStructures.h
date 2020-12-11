@@ -193,10 +193,30 @@ namespace FEM_SYSTEM
 		}
 	};
 
+	struct CableDescriptor
+	{
+		int divs = 10;
+		real length = 1;
+		Vector3R offset;
+		Vector3R dir = { 1, 0, 0 };
+		bool useFreeCable = true;
+		real stiffness = 1000;
+	};
+
 	struct SpringNode
 	{
 		Vector3R bary; // barycentric coordinates inside element
 		int elem; // element index
+	};
+
+	struct Cable
+	{
+		std::vector<SpringNode> mCableNodes;
+		std::vector<Vector3R> mCablePositions;
+		real mActuation = 1.0;
+		real mCableRestLength;
+		real mCableStiffness = 1000;
+		real mCableDamping = 0;
 	};
 
 	typedef Eigen::Matrix<real, 6, 1> Vector6;

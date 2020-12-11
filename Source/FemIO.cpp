@@ -581,7 +581,7 @@ namespace FEM_SYSTEM
 	}
 
 	bool IO::LoadFromXmlFile(const char* path, std::vector<Node>& nodes, std::vector<Tet>& tets,
-		std::vector<int>& fixedNodes, std::vector<uint32>& surfTris, FemConfig& femConfig, float& scale, std::string& visualPath)
+		std::vector<int>& fixedNodes, std::vector<uint32>& surfTris, FemConfig& femConfig, float& scale, std::string& visualPath, std::vector<CableDescriptor>& cables)
 	{
 		// extract directory name
 		std::string fileName(path);
@@ -796,6 +796,52 @@ namespace FEM_SYSTEM
 			{
 				femConfig.mAbsNewtonRsidualThreshold = atof(tol);
 			}
+		}
+
+		tinyxml2::XMLElement* xCable = root->FirstChildElement("cable");
+		if (xCable)
+		{
+			CableDescriptor descriptor;
+
+			const char* str = xCable->Attribute("divs");
+			if (str)
+			{
+				descriptor.divs = atoi(str);
+			}
+
+			str = xCable->Attribute("len");
+			if (str)
+			{
+				descriptor.length = atof(str);
+			}
+
+			str = xCable->Attribute("offset");
+			if (str)
+			{
+				std::string vec(str);
+				size_t s1, s2;
+				real x = std::stod(vec, &s1);
+				real y = std::stod(vec.substr(s1 + 1), &s2);
+				real z = std::stod(vec.substr(s1 + s2 + 2));
+				descriptor.offset.Set(x, y, z);
+			}
+
+			str = xCable->Attribute("axis");
+			if (str)
+			{
+				if (str[0] == 'y')
+					descriptor.dir.Set(0, 1, 0);
+				else if (str[0] == 'z')
+					descriptor.dir.Set(0, 0, 1);
+			}
+
+			str = xCable->Attribute("stiffness");
+			if (str)
+			{
+				descriptor.stiffness = atof(str);
+			}
+
+			cables.push_back(descriptor);
 		}
 		
 		return true;

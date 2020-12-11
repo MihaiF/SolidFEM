@@ -154,20 +154,9 @@ namespace FEM_SYSTEM
 		}
 	}
 
-	void FemPhysicsBase::AddCable(const std::vector<SpringNode>& cable, const Vector3Array& pos, real restLength, real stiffness, real damping, real actuation)
+	void FemPhysicsBase::AddCable(const Cable& cable)
 	{
-		Cable femCable;
-		femCable.mCableNodes = cable;
-		femCable.mActuation = actuation;
-		mCableRestLength = restLength * 0.01; // convert to meters
-		mCableStiffness = stiffness;
-		mCableDamping = damping;
-		femCable.mCablePositions.resize(cable.size());
-		for (uint32 i = 0; i < cable.size(); i++)
-		{
-			femCable.mCablePositions[i] = pos[i];
-		}
-		mCables.push_back(femCable);
+		mCables.push_back(cable);
 	}
 
 	void FemPhysicsBase::GetForceParamGrads(EigenVector& gradMu, EigenVector& gradLambda, EigenVector& gradRho)
@@ -256,24 +245,24 @@ namespace FEM_SYSTEM
 		}
 		// 1. Compute spring errors and forces
 		std::vector<Vector3R> springForces(numSprings);
-		const real eps = mCableRestLength * 0.01;
+		const real eps = cable.mCableRestLength * 0.01;
 		for (uint32 i = 0; i < numSprings; i++)
 		{
 			Vector3R y = cable.mCablePositions[i + 1] - cable.mCablePositions[i];
 			real len = y.Length();
 			Vector3R dir = (1.0 / len) * y;
-			real err = len - mCableRestLength * cable.mActuation;
-			real tension = -2 * mCableStiffness * err;
+			real err = len - cable.mCableRestLength * cable.mActuation;
+			real tension = -2 * cable.mCableStiffness * err;
 			// Bern tension model (unilateral spring + twice differentiable)
 			if (err < -eps)
 				tension = 0;
 			else if (err >= -eps && err <= eps)
-				tension = -mCableStiffness * (0.5 * err * err / eps + err + 0.5 * eps);
+				tension = -cable.mCableStiffness * (0.5 * err * err / eps + err + 0.5 * eps);
 
 			// damping force (along spring)
 			Vector3R z = vels[i + 1] - vels[i];
 			real dv = z.Dot(dir);
-			real damping = -mCableDamping * dv;
+			real damping = -cable.mCableDamping * dv;
 
 			springForces[i] = (tension + damping) * dir;
 		}

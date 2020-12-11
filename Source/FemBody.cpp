@@ -5,15 +5,116 @@
 
 namespace FEM_SYSTEM
 {
-	void FemBody::LoadFromXml(const char* path)
+	inline real ComputeTetVolume(const Vector3R& x0, const Vector3R& x1, const Vector3R& x2, const Vector3R& x3)
+	{
+		Vector3R d1 = x1 - x0;
+		Vector3R d2 = x2 - x0;
+		Vector3R d3 = x3 - x0;
+		Matrix3R mat(d1, d2, d3);
+		return mat.Determinant() / 6;
+	}
+
+	inline void ComputeBarycentric(const Vector3R& p, const Vector3R& x0, const Vector3R& x1, const Vector3R& x2, const Vector3R& x3,
+		real& w0, real& w1, real& w2, real& w3)
+	{
+		real vol = ComputeTetVolume(x0, x1, x2, x3);
+		real vol0 = ComputeTetVolume(p, x1, x2, x3);
+		real vol1 = ComputeTetVolume(x0, p, x2, x3);
+		real vol2 = ComputeTetVolume(x0, x1, p, x3);
+		real vol3 = ComputeTetVolume(x0, x1, x2, p);
+		w0 = vol0 / vol;
+		w1 = vol1 / vol;
+		w2 = vol2 / vol;
+		w3 = vol3 / vol;
+	}
+
+	void CreateCable(const CableDescriptor& descriptor,
+		const std::vector<Node>& nodes,
+		const std::vector<Tet>& tets,
+		FemPhysicsBase* femPhysics,
+		real scale/* = 1*/)
+	{
+		Cable cable;
+		int numSprings = descriptor.divs;
+		real div = descriptor.length / numSprings;
+		cable.mCableNodes.resize(numSprings + 1);
+		cable.mCablePositions.resize(numSprings + 1);
+		// generate a sequence of points along x axis
+		for (int i = 0; i <= numSprings; i++)
+		{
+			Vector3R pos = i * div * descriptor.dir;
+			pos += descriptor.offset;
+			// register the point to the tet mesh
+			real minScore = 1e20;
+			int elem = -1;
+			real minScorePos = 1e20;
+			int elemPos = -1;
+			for (uint32 e = 0; e < tets.size(); e++)
+			{
+				real score = 0;
+				const Tet& tet = tets[e];
+
+				Vector3R x0 = scale * nodes[tet.idx[0]].pos;
+				Vector3R x1 = scale * nodes[tet.idx[1]].pos;
+				Vector3R x2 = scale * nodes[tet.idx[2]].pos;
+				Vector3R x3 = scale * nodes[tet.idx[3]].pos;
+				real w0, w1, w2, w3;
+				ComputeBarycentric(pos, x0, x1, x2, x3, w0, w1, w2, w3);
+				real eps = -0.001;
+				bool positive = w0 > eps && w1 > eps && w2 > eps && w3 > eps;
+
+				for (int j = 0; j < 4; j++)
+				{
+					Vector3R node = 100.0 * nodes[tet.idx[j]].pos;
+					score += (node - pos).LengthSquared();
+				}
+				if (score < minScore)
+				{
+					minScore = score;
+					elem = e;
+				}
+				if (positive && score < minScorePos)
+				{
+					minScorePos = score;
+					elemPos = e;
+				}
+			}
+			if (elemPos >= 0)
+				elem = elemPos;
+			const Tet& tet = tets[elem];
+			Vector3R x0 = scale * nodes[tet.idx[0]].pos;
+			Vector3R x1 = scale * nodes[tet.idx[1]].pos;
+			Vector3R x2 = scale * nodes[tet.idx[2]].pos;
+			Vector3R x3 = scale * nodes[tet.idx[3]].pos;
+			real w0, w1, w2, w3;
+			ComputeBarycentric(pos, x0, x1, x2, x3, w0, w1, w2, w3);
+			Printf("%g, %g, %g, %g\n", w0, w1, w2, w3);
+			real eps = 0.1;
+			if (descriptor.useFreeCable && (w0 < -eps || w1 < -eps || w2 < -eps || w3 < -eps))
+				cable.mCableNodes[i].elem = -elem;
+			else
+				cable.mCableNodes[i].elem = elem;
+			cable.mCableNodes[i].bary.Set(w0, w1, w2);
+			cable.mCablePositions[i] = (1 / scale) * pos;
+		}
+
+		cable.mActuation = 0.5;
+		cable.mCableRestLength = div / scale;
+		cable.mCableStiffness = descriptor.stiffness;
+
+		femPhysics->AddCable(cable);
+	}
+
+	bool FemBody::LoadFromXml(const char* path)
 	{
 		std::vector<uint32> surfTris;
 		std::string visualPath;
 		float scale;
-		if (!IO::LoadFromXmlFile(std::string(path).c_str(), mNodes, mTets, mFixedNodes, surfTris, mConfig, scale, visualPath))
+		std::vector<CableDescriptor> cables;
+		if (!IO::LoadFromXmlFile(std::string(path).c_str(), mNodes, mTets, mFixedNodes, surfTris, mConfig, scale, visualPath, cables))
 		{
 			Printf("Failed to load file\n");
-			return;
+			return false;
 		}
 		Prepare();
 		BuildBoundaryMesh();
@@ -21,6 +122,7 @@ namespace FEM_SYSTEM
 		{
 			LoadVisualMesh(visualPath.c_str(), Vector3(), scale);
 		}
+		return true;
 	}
 
 	void FemBody::Prepare()

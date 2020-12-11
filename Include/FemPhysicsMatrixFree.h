@@ -123,7 +123,7 @@ namespace FEM_SYSTEM
 
 			void ReshuffleFixedNodes();
 
-			void AddCable(const std::vector<SpringNode>& cable, const Vector3Array& pos, real restLength, real stiffness, real damping, real actuation) override;
+			void AddCable(const Cable& cable) override;
 
 		protected:
 			void ComputeForceDifferential(const std::vector<Vector3R>& dx, std::vector<Vector3R>& df) const;

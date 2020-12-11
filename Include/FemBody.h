@@ -40,7 +40,7 @@ namespace FEM_SYSTEM
 	class FemBody
 	{
 	public:
-		void LoadFromXml(const char* path);
+		bool LoadFromXml(const char* path);
 		void Prepare();
 		
 		void BuildBoundaryMesh();
@@ -88,4 +88,10 @@ namespace FEM_SYSTEM
 		Mesh mVisualMesh;
 		std::vector<MeshInterp> mMapData;
 	};
+
+	void CreateCable(const CableDescriptor& descriptor,
+		const std::vector<Node>& nodes,
+		const std::vector<Tet>& tets,
+		FemPhysicsBase* femPhysics,
+		real scale = 1);
 }

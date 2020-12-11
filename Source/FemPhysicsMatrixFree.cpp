@@ -262,15 +262,15 @@ namespace FEM_SYSTEM
 		}
 	}
 
-	void FemPhysicsMatrixFree::AddCable(const std::vector<SpringNode>& cable, const Vector3Array& pos, real restLength, real stiffness, real damping, real actuation)
+	void FemPhysicsMatrixFree::AddCable(const Cable& cable)
 	{
-		FemPhysicsBase::AddCable(cable, pos, restLength, stiffness, damping, actuation);
+		FemPhysicsBase::AddCable(cable);
 		// add new DOF nodes for the unattached spring nodes
 		Cable& currCable = mCables[mCables.size() - 1];
 		mNumSpringNodes = 0;
-		for (uint32 i = 0; i < cable.size(); i++)
+		for (uint32 i = 0; i < cable.mCableNodes.size(); i++)
 		{
-			int elem = cable[i].elem;
+			int elem = cable.mCableNodes[i].elem;
 			if (elem < 0)
 			{
 				const Tetrahedron& tet = tets[-elem];
@@ -1090,20 +1090,20 @@ namespace FEM_SYSTEM
 		// TODO: reuse cable positions
 		// 1. Compute spring errors and potentials
 		std::vector<Vector3R> springForces(numSprings);
-		const real eps = mCableRestLength * 0.01;
+		const real eps = cable.mCableRestLength * 0.01;
 		real energy = 0;
 		for (uint32 i = 0; i < numSprings; i++)
 		{
 			Vector3R y = cable.mCablePositions[i + 1] - cable.mCablePositions[i];
 			real len = y.Length();
 			Vector3R dir = (1.0 / len) * y;
-			real err = len - mCableRestLength * cable.mActuation;
-			real potential = mCableStiffness * (err * err + eps * eps / 3);
+			real err = len - cable.mCableRestLength * cable.mActuation;
+			real potential = cable.mCableStiffness * (err * err + eps * eps / 3);
 			// Bern tension model (unilateral spring + twice differentiable)
 			if (err < -eps)
 				potential = 0;
 			else if (err >= -eps && err <= eps)
-				potential = 0.5 * mCableStiffness * (err * err * err / 3 / eps + err * err + eps * err + eps * eps / 3);
+				potential = 0.5 * cable.mCableStiffness * (err * err * err / 3 / eps + err * err + eps * err + eps * eps / 3);
 			energy += potential;
 		}
 		return energy;
