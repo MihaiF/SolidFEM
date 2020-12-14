@@ -52,7 +52,8 @@ py::tuple PyLoadFromXml(py::str path)
 	FemConfig config; // default config
 	std::string visualPath;
 	float scale;
-	IO::LoadFromXmlFile(std::string(path).c_str(), nodes, tets, fixedNodes, surfTris, config, scale, visualPath);
+	std::vector<CableDescriptor> cables;
+	IO::LoadFromXmlFile(std::string(path).c_str(), nodes, tets, fixedNodes, surfTris, config, scale, visualPath, cables);
 
 	int numNodes = (int)nodes.size();
 	py::array_t<double> pyNodes = py::array_t<double>(numNodes * 3);
@@ -105,5 +106,6 @@ PYBIND11_MODULE(pysolidfem, m) {
 		.def("compute_force_param_grads", &PyNonlinearFEM::ComputeForceParamGrads)
 		.def("get_force_mu_grad", &PyNonlinearFEM::GetForceMuGrad)
 		.def("get_force_lambda_grad", &PyNonlinearFEM::GetForceLambdaGrad)
-		.def("get_force_rho_grad", &PyNonlinearFEM::GetForceRhoGrad);
+		.def("get_force_rho_grad", &PyNonlinearFEM::GetForceRhoGrad)
+		.def("set_cable_actuation", &PyNonlinearFEM::SetCableActuation);
 }

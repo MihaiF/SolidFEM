@@ -98,7 +98,7 @@ namespace FEM_SYSTEM
 			cable.mCablePositions[i] = (1 / scale) * pos;
 		}
 
-		cable.mActuation = 0.5;
+		cable.mActuation = 1;
 		cable.mCableRestLength = div / scale;
 		cable.mCableStiffness = descriptor.stiffness;
 
@@ -109,9 +109,8 @@ namespace FEM_SYSTEM
 	{
 		std::vector<uint32> surfTris;
 		std::string visualPath;
-		float scale;
-		std::vector<CableDescriptor> cables;
-		if (!IO::LoadFromXmlFile(std::string(path).c_str(), mNodes, mTets, mFixedNodes, surfTris, mConfig, scale, visualPath, cables))
+		float scale;		
+		if (!IO::LoadFromXmlFile(std::string(path).c_str(), mNodes, mTets, mFixedNodes, surfTris, mConfig, scale, visualPath, mCables))
 		{
 			Printf("Failed to load file\n");
 			return false;

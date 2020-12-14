@@ -131,7 +131,7 @@ namespace FEM_SYSTEM
 		uint32 GetNumCables() const { return (uint32)mCables.size(); }
 		const Cable& GetCable(uint32 i) const { return mCables[i]; }
 		const Vector3R& GetCablePosition(uint32 cable, uint32 node) const { return mCables[cable].mCablePositions[node]; }
-		void SetCableActuation(uint32 cable, real actuation) { mCables[cable].mActuation = actuation; }
+		void SetCableActuation(uint32 cable, real actuation) { if (cable < mCables.size()) mCables[cable].mActuation = actuation; }
 		void ComputeSpringForces(Cable& cable, std::vector<Vector3R>& femForces);
 		void ComputeSpringForces(std::vector<Vector3R>& femForces);
 		

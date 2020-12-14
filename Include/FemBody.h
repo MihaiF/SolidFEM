@@ -57,7 +57,7 @@ namespace FEM_SYSTEM
 		FemConfig& GetConfig() { return mConfig; }
 		std::vector<Node>& GetNodes() { return mNodes; }
 		std::vector<Tet>& GetTets() { return mTets; }
-		std::vector<int>& GetFixedNodes() { return mFixedNodes; }
+		std::vector<int>& GetFixedNodes() { return mFixedNodes; }		
 
 		// const getters
 		const std::vector<Node>& GetNodes() const { return mNodes; }
@@ -65,6 +65,7 @@ namespace FEM_SYSTEM
 		const Mesh& GetBoundaryMesh() const { return mBoundaryMesh; }
 		const Mesh& GetVisualMesh() const { return mVisualMesh; }
 		const std::vector<int>& GetBoundaryNodes() const { return mBoundaryToNodesMap; }
+		const std::vector<CableDescriptor>& GetCables() const { return mCables; }
 
 		// setters
 		void SetConfig(const FemConfig& config) { mConfig = config; }
@@ -87,6 +88,8 @@ namespace FEM_SYSTEM
 		// visual surface mesh
 		Mesh mVisualMesh;
 		std::vector<MeshInterp> mMapData;
+
+		std::vector<CableDescriptor> mCables;
 	};
 
 	void CreateCable(const CableDescriptor& descriptor,

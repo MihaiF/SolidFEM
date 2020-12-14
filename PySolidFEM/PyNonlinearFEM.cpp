@@ -75,7 +75,7 @@ PyNonlinearFEM::PyNonlinearFEM(py::str path)
 	{
 		mBody.GetConfig().mMaterial = (MaterialModelType)MMT_NEO_HOOKEAN;
 		mNonlinConfig.mSolver = NST_NEWTON_LS;
-		mNonlinConfig.mOptimizer = true;
+		mNonlinConfig.mOptimizer = mUseOptimizer;
 		mBody.GetConfig().mCustomConfig = &mNonlinConfig;
 		mPhys.reset(new FemPhysicsMatrixFree(mBody.GetTets(), mBody.GetNodes(), mBody.GetConfig()));
 	}
@@ -85,6 +85,10 @@ PyNonlinearFEM::PyNonlinearFEM(py::str path)
 		mMixedConfig.mSolver = NST_NEWTON_LS;
 		mBody.GetConfig().mCustomConfig = &mMixedConfig;
 		mPhys.reset(new FemPhysicsMixed(mBody.GetTets(), mBody.GetNodes(), mBody.GetConfig()));
+	}
+	for (const CableDescriptor& desc : mBody.GetCables())
+	{
+		CreateCable(desc, mBody.GetNodes(), mBody.GetTets(), mPhys.get());
 	}
 }
 
@@ -102,7 +106,7 @@ PyNonlinearFEM::PyNonlinearFEM(py::str path, py::dict config)
 	{
 		mBody.GetConfig().mMaterial = (MaterialModelType)MMT_NEO_HOOKEAN;
 		mNonlinConfig.mSolver = NST_NEWTON_LS;
-		mNonlinConfig.mOptimizer = true;
+		mNonlinConfig.mOptimizer = mUseOptimizer;
 		mBody.GetConfig().mCustomConfig = &mNonlinConfig;
 		mPhys.reset(new FemPhysicsMatrixFree(mBody.GetTets(), mBody.GetNodes(), mBody.GetConfig()));
 	}
@@ -112,6 +116,10 @@ PyNonlinearFEM::PyNonlinearFEM(py::str path, py::dict config)
 		mMixedConfig.mSolver = NST_NEWTON_LS;
 		mBody.GetConfig().mCustomConfig = &mMixedConfig;
 		mPhys.reset(new FemPhysicsMixed(mBody.GetTets(), mBody.GetNodes(), mBody.GetConfig()));
+	}
+	for (const CableDescriptor& desc : mBody.GetCables())
+	{
+		CreateCable(desc, mBody.GetNodes(), mBody.GetTets(), mPhys.get());
 	}
 }
 
@@ -253,11 +261,15 @@ FEM_SYSTEM::FemConfig PyNonlinearFEM::ParseConfig(py::dict config)
 	{
 		mUseMixed = py::cast<bool>(config["mixed"]);
 	}
+	if (config.contains("optimizer"))
+	{
+		mUseOptimizer = py::cast<bool>(config["optimizer"]);
+	}
 	if (!mUseMixed)
 	{
 		nConfig.mMaterial = (MaterialModelType)MMT_NEO_HOOKEAN;
 		mNonlinConfig.mSolver = NST_NEWTON_LS;
-		mNonlinConfig.mOptimizer = true;
+		mNonlinConfig.mOptimizer = mUseOptimizer;
 		nConfig.mCustomConfig = &mNonlinConfig;
 	}
 	else

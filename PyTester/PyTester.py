@@ -300,6 +300,15 @@ def test_cantilever_static():
     #sim2.solve_grad_desc(3e-5, 70000, 1e-15, 0.1)
     #print(sim2.nodes[-1])
 
+def test_cantilever_cable():
+    # C++ simulator
+    simC = psf.NonlinearFEM('../Models/cantilever_cable.xml')
+    simC.set_cable_actuation(0, 0.5)
+    simC.step()
+    nodes2 = simC.get_nodes()
+    simC.save_to_vtk('cantilever_cable.vtk')
+    simC.save_to_obj('cantilever_cable.obj')
+
 def test_hammerbot():
     config = {
         "young": 90000,
@@ -431,7 +440,8 @@ def test_hammerbot():
 torch.set_printoptions(precision=8)
 #test_tetrahedron_static()
 #test_cantilever_static()
-test_hammerbot()
+test_cantilever_cable()
+#test_hammerbot()
 
 # explicit integration
 #fem = psf.NonlinearFEM('hammerbot_explicit.xml')

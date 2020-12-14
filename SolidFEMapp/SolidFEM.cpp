@@ -232,10 +232,11 @@ int main(int argc, char* argv[], char* envp[])
 		femPhysics->AddDirichletBC(bcIndices[i], bcFlag);
 	}
 
-	for (CableDescriptor& desc : cables)
+	for (const CableDescriptor& desc : cables)
 	{
 		CreateCable(desc, body.GetNodes(), body.GetTets(), femPhysics);
 	}
+	femPhysics->SetCableActuation(0, 0.5);
 
 	Printf("FEM Config:\n");
 	Printf("-----------\n");

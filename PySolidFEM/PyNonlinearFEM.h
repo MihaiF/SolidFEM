@@ -70,6 +70,7 @@ public:
 	EigenVector GetForceRhoGrad() const { return mForceGradLambda; }
 	py::tuple GetBoundaryMesh() const;
 	py::tuple GetVisualMesh() const;
+	void SetCableActuation(uint32 cable, real actuation) { mPhys->SetCableActuation(cable, actuation); }
 
 private:
 	FemConfig ParseConfig(py::dict config);
@@ -80,6 +81,7 @@ private:
 	FemPhysicsMatrixFree::Config mNonlinConfig;
 	FemPhysicsMixed::Config mMixedConfig;
 	bool mUseMixed = false;
+	bool mUseOptimizer = false;
 	EigenVector mForceGradMu;
 	EigenVector mForceGradLambda;
 	EigenVector mForceRhoLambda;
