@@ -88,7 +88,7 @@ namespace FEM_SYSTEM
 			Vector3R x3 = scale * nodes[tet.idx[3]].pos;
 			real w0, w1, w2, w3;
 			ComputeBarycentric(pos, x0, x1, x2, x3, w0, w1, w2, w3);
-			Printf("%g, %g, %g, %g\n", w0, w1, w2, w3);
+			//Printf("%g, %g, %g, %g\n", w0, w1, w2, w3);
 			real eps = 0.1;
 			if (descriptor.useFreeCable && (w0 < -eps || w1 < -eps || w2 < -eps || w3 < -eps))
 				cable.mCableNodes[i].elem = -elem;

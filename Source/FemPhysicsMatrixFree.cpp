@@ -284,6 +284,7 @@ namespace FEM_SYSTEM
 				Node node;
 				node.invMass = invMass; // TODO: average node mass
 				node.pos = currCable.mCablePositions[i];
+				mReshuffleMap.push_back(nodes.size());
 				nodes.push_back(node);
 				mNumSpringNodes++;
 			}

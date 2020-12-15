@@ -236,7 +236,7 @@ int main(int argc, char* argv[], char* envp[])
 	{
 		CreateCable(desc, body.GetNodes(), body.GetTets(), femPhysics);
 	}
-	femPhysics->SetCableActuation(0, 0.5);
+	femPhysics->SetCableActuation(0, 0.82);
 
 	Printf("FEM Config:\n");
 	Printf("-----------\n");

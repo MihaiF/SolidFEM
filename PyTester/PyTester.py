@@ -301,13 +301,72 @@ def test_cantilever_static():
     #print(sim2.nodes[-1])
 
 def test_cantilever_cable():
+    path = '../Models/cantilever_cable.xml'
     # C++ simulator
-    simC = psf.NonlinearFEM('../Models/cantilever_cable.xml')
+    simC = psf.NonlinearFEM(path)
     simC.set_cable_actuation(0, 0.5)
     simC.step()
     nodes2 = simC.get_nodes()
     simC.save_to_vtk('cantilever_cable.vtk')
     simC.save_to_obj('cantilever_cable.obj')
+
+    # Python simulator
+    N, T, fixed = psf.load_from_xml(path)
+    #config = {
+    #    "young": 66000,
+    #    "poisson": 0.45,
+    #    'density': 1070,
+    #    "simtype": 0,
+    #    "substeps": 10,
+    #}
+    #sim = Simulator(N, T.flatten(), fixed, config)
+
+    ## compute target set
+    #V, F, boundary = simC.get_boundary_mesh()
+    #target_set = np.intersect1d(sim.free, boundary)
+    #target_setf = target_set - len(fixed)
+
+    target_set = 76
+
+    # cable control
+    target = nodes2[target_set]
+    target[0] += 0.1
+    print(target)
+
+    def inverse_objective(x):
+        alpha = x[0]
+        simC = psf.NonlinearFEM(path)
+        simC.set_cable_actuation(0, alpha)
+        simC.step()
+        nodesC = simC.get_nodes()
+        delta = (nodesC[target_set] - target).flatten()
+        error = 0.5 * np.dot(delta, delta)
+        return error
+
+    alpha = 1;
+    x0 = [alpha]
+    sol = minimize(inverse_objective, x0, method='Nelder-Mead')
+    print(sol)
+    alpha = sol.x[0]
+    print(alpha)
+
+    # simulate again
+    simC = psf.NonlinearFEM(path)
+    simC.set_cable_actuation(0, alpha)
+    simC.step()
+    simC.save_to_vtk('cantilever_control.vtk')
+    simC.save_to_obj('cantilever_control.obj')
+
+    # plot the mesh
+    #fig = plt.figure()
+    #ax = fig.add_subplot(111, projection='3d')                
+    #pos = nodesC.flatten()
+    #x = pos[0::3]
+    #y = pos[1::3]
+    #z = pos[2::3]
+    #ax.plot_trisurf(x, z, y, linewidth=0.2, antialiased=True, triangles=T)
+    #plt.savefig('tetmesh.png')
+
 
 def test_hammerbot():
     config = {
@@ -436,12 +495,21 @@ def test_hammerbot():
     #sim2.solve_grad_desc(2e-4, 70000, 1e-15, 0.1)
     #plot_nodes(sim2.nodes)
 
+def test_hammerbot_cable():
+    # create the simulator from file
+    path = '../Models/hammerbot_cable.xml'
+    fem = psf.NonlinearFEM(path)
+    fem.set_cable_actuation(0, 0.82)
+    fem.simulate_static()
+    nodes = fem.get_nodes()
+    fem.save_to_vtk("../Models/hammerbot_cable.vtk")
+    fem.save_to_obj('../Models/hammerbot_cable.obj')
 
 torch.set_printoptions(precision=8)
 #test_tetrahedron_static()
 #test_cantilever_static()
-test_cantilever_cable()
-#test_hammerbot()
+#test_cantilever_cable()
+test_hammerbot_cable()
 
 # explicit integration
 #fem = psf.NonlinearFEM('hammerbot_explicit.xml')

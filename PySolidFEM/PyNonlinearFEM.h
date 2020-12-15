@@ -56,6 +56,7 @@ public:
 	PyNonlinearFEM(py::str path);
 	PyNonlinearFEM(py::str path, py::dict config);
 	void Step(real dt = DT);
+	void SimulateStatic();
 	py::array_t<double> GetNodes() const;
 	py::array_t<int> GetTets() const;
 	void SaveToVTK(py::str path);

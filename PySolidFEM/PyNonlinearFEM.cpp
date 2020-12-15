@@ -131,6 +131,17 @@ void PyNonlinearFEM::Step(real dt /*= DT*/)
 		mBody.UpdateVisualMesh();
 }
 
+void PyNonlinearFEM::SimulateStatic()
+{
+	int step = 1;
+	while (mPhys->GetForceFraction() < 1)
+	{
+		Printf("Step %d\n", step);
+		mPhys->Step(0);
+		step++;
+	}
+}
+
 py::array_t<double> PyNonlinearFEM::GetNodes() const
 {
 	// allocate the buffer

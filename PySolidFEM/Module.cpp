@@ -94,6 +94,7 @@ PYBIND11_MODULE(pysolidfem, m) {
 		.def(py::init<py::str>())
 		.def(py::init<py::str, py::dict>())
 		.def("step", &PyNonlinearFEM::Step, py::arg("dt") = DT)
+		.def("simulate_static", &PyNonlinearFEM::SimulateStatic)
 		.def("get_nodes", &PyNonlinearFEM::GetNodes)
 		.def("save_to_vtk", &PyNonlinearFEM::SaveToVTK)
 		.def("save_to_obj", &PyNonlinearFEM::SaveToOBJ)
