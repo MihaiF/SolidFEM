@@ -11,4 +11,4 @@ Please use the pytorch channel when installing packages in conda to avoid confli
 Because of the torch-scatter package we are forced to use pytorch version 1.6.0: https://pytorch.org/get-started/previous-versions/
 Find installation instructions on the torch-scatter page: https://github.com/rusty1s/pytorch_scatter
 
-For Intel MKL support please go to the official website and download the SDK.
+For Intel MKL support please go to the official website and download the SDK. You may have to copy mkl_sequential.dll to x64/Release or add it to a system path.
