@@ -8,7 +8,6 @@ This will probably force the Python version to 3.8, therefore you will need to u
 I recommend installing Miniconda and using the "Python 3.8 (64 bit)" environment inside Visual Studio. Also please set the PYTHONPATH env var to the root folder of this Python installation.
 Be very careful with recent versions of vcpkg as they use Python 3.9. I advise to roll back before that (e.g., revision e803bf11).
 Please use the pytorch channel when installing packages in conda to avoid conflicts, notably the matplotlib and scipy packages.
-Because of the torch-scatter package we are forced to use pytorch version 1.6.0: https://pytorch.org/get-started/previous-versions/
 Find installation instructions on the torch-scatter page: https://github.com/rusty1s/pytorch_scatter
 
 For Intel MKL support please go to the official website and download the SDK. You may have to copy mkl_sequential.dll to x64/Release or add it to a system path.
